@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "cityscaper"
+version = "0.1.0"
+description = ""
+authors = ["emunsing <eric.munsing@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+# Note: BPy currently requires Python 3.11
+python = "3.11.*"
+mathutils = "*"
+pyreadr = "*"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

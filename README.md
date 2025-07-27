@@ -18,13 +18,52 @@ format(coords[,1:2], digits=7, nsmall=8)  # NOTE: You *Must* export with high re
 
 The lat/lon are transformed by Blender **via a custom TransverseMercator implementation** not by a standard PythonProjection.  Using the custom implementation is the best way to pull external lat/lon data into Blender.
 
-Material textures require scaling to the appropriate size. 
+Material textures require scaling to the appropriate size.
 
+### Rezonings:
+- current/baseline: "business as usual" -> ex_height2024 for heights,
+- Fall 2023 - "D" - M4_ZONING
+- Feb 2024 - "E" - M5_ZONING
+- April 2025 Family Rezoning - "F" - M6_ZONING
+  - df[!is.na(df$M6_ZONING) & (is.na(df$M6_height) | df$M6_height < 65) & (df$is_corner | df$ACRES > (8000 / 43560)), 'M6_ZONING'] <- "65' Height Allowed"
+- "skyscraper" - scenario where 245-ft height limits are used everywhere
+  - expected_units_skyscraper_if_dev is based on a uniform 245-ft height limit 
+  - pdev_skyscraper_1yr comes from predicting development based on expected_units_skyscraper_if_dev with 245-ft heights
+
+### Builder's Remedy
+- stack_sdbl = True
+- sdbl <- 1 + .4 * .6
+- df$expected_units_if_dev <- pmin(df$expected_units_if_dev, df$builders_remedy_du_acre * df$ACRES, na.rm=T)
+      df <- df %>% mutate(
+        Envelope_1000 = if_else(expected_units_if_dev > 5, Envelope_1000 * sdbl, Envelope_1000),
+        Upzone_Ratio = if_else(existing_sqft > 0, Envelope_1000 / existing_sqft, 0),
+        expected_units_if_dev = if_else(expected_units_if_dev > 5, expected_units_if_dev * sdbl, expected_units_if_dev)
+      )
+
+  
 # Workflow in R
-preprocessing:
+
+App.R:
+- Load heights and modify df 
+- compute expected_units_if_dev
+- run `predict()` to get `predictions.16` as rezoning pdev and 
+- 
+
+### Relevant files:
+
+'five_rezonings_processed.RDS'
+- ACRES
+- mapblklot
+- geometry (geojson)
+- ENVELOPE_1000 : allowable floor space in square feet
+- pdev_baseline_1yr: no-change development probability
+- ex_height2024: no-change heights
+- expected_units_baseline_if_dev: no-change development units
+
+preprocessing.R:
 - ACRES * 43560 : square feet of base lot
 - ground_floor = (ACRES * 43560) * lot_coverage_discount
-- building_efficiency_discount <- .8
+- building_efficiency_discount <- .8 : global assumption for the file
 - n_floors_residential
 - expected_built_envelope: total square feet expected. Note that for large-lot or >8 stories this is 
 

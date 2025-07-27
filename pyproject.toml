@@ -10,7 +10,19 @@ readme = "README.md"
 python = "3.11.*"
 mathutils = "*"
 pyreadr = "*"
+pandas = "*"
 
+
+# DEV DEPDENDENCIES - Jupyter, visualizations, etc. Add these like `$ poetry install --with dev`
+[tool.poetry.group.dev]
+optional = true
+[tool.poetry.group.dev.dependencies]
+jupyter = "*"
+ipykernel = "*"
+matplotlib = "*"
+python-dotenv = "*"
+black = "*"
+pytest = "*"
 
 [build-system]
 requires = ["poetry-core"]

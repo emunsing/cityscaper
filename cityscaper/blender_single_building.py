@@ -33,6 +33,46 @@ class TransverseMercator:
         lat = math.degrees(lat)
         return (lat, lon)
 
+def dist_pt_seg_2d(p, a, b):
+    vx, vy = b.x - a.x, b.y - a.y
+    wx, wy = p.x - a.x, p.y - a.y
+    denom = vx * vx + vy * vy
+    if denom == 0:
+        return math.hypot(wx, wy)
+    t = max(0, min(1, (wx * vx + wy * vy) / denom))
+    qx, qy = a.x + vx * t, a.y + vy * t
+    return math.hypot(p.x - qx, p.y - qy)
+
+def make_uv_mat(name, img_path):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    links = nt.links
+
+    texco = nt.nodes.new("ShaderNodeTexCoord")
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(bpy.path.abspath(f"//{img_path}"))
+    tex.extension = 'REPEAT'
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+
+    links.new(texco.outputs["UV"], tex.inputs["Vector"])
+    links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 0) Building parameters: (lat, lon) geojson and height in feet
+# ─────────────────────────────────────────────────────────────────────────────
+parcel_ll = [
+    (-122.43128652, 37.77000042),
+    (-122.43125537, 37.76984584),
+    (-122.43156286, 37.76980688),
+    (-122.43159400, 37.76996146),
+]
+parcel_height = 85
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1) Set up projection (must match your BLOSM import)
@@ -44,12 +84,6 @@ proj = TransverseMercator(lat=lat0, lon=lon0, k=1.0)
 # ─────────────────────────────────────────────────────────────────────────────
 # 2) Define your parcel corners (lon, lat) from R
 # ─────────────────────────────────────────────────────────────────────────────
-parcel_ll = [
-    (-122.43128652, 37.77000042),
-    (-122.43125537, 37.76984584),
-    (-122.43156286, 37.76980688),
-    (-122.43159400, 37.76996146),
-]
 
 # project to Blender units (X, Y)
 parcel_xy = [proj.fromGeographic(lat=lat, lon=lon)[:2] for lon, lat in parcel_ll]
@@ -63,21 +97,6 @@ for i in range(len(parcel_xy)):
     a = mathutils.Vector(parcel_xy[i])
     b = mathutils.Vector(parcel_xy[(i + 1) % len(parcel_xy)])
     edges.append((a, b))
-
-
-def dist_pt_seg_2d(p, a, b):
-    ax, ay = a.x, a.y
-    bx, by = b.x, b.y
-    px, py = p.x, p.y
-    vx, vy = bx - ax, by - ay
-    wx, wy = px - ax, py - ay
-    denom = vx * vx + vy * vy
-    if denom == 0:
-        return math.hypot(wx, wy)
-    t = max(0, min(1, (wx * vx + wy * vy) / denom))
-    qx, qy = ax + vx * t, ay + vy * t
-    return math.hypot(px - qx, py - qy)
-
 
 tile = bpy.data.objects["Google 3D Tiles"]
 M = tile.matrix_world
@@ -95,7 +114,7 @@ if min_z == float('inf'):
 # ─────────────────────────────────────────────────────────────────────────────
 # 4) Build & extrude the Building mesh
 # ─────────────────────────────────────────────────────────────────────────────
-h_bu = 85 * 0.3048  # 85 ft → ~25.9 m → Blender units
+h_bu = parcel_height * 0.3048  # 85 ft → ~25.9 m → Blender units
 
 mesh = bpy.data.meshes.new("BuildingMesh")
 obj = bpy.data.objects.new("Building", mesh)
@@ -121,26 +140,6 @@ bm.free()
 # 5) Create Box-projection materials
 # ─────────────────────────────────────────────────────────────────────────────
 
-def make_uv_mat(name, img_path):
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    nt = mat.node_tree
-    nt.nodes.clear()
-    links = nt.links
-
-    texco = nt.nodes.new("ShaderNodeTexCoord")
-    tex = nt.nodes.new("ShaderNodeTexImage")
-    tex.image = bpy.data.images.load(bpy.path.abspath(f"//{img_path}"))
-    tex.extension = 'REPEAT'
-    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
-    out = nt.nodes.new("ShaderNodeOutputMaterial")
-
-    links.new(texco.outputs["UV"], tex.inputs["Vector"])
-    links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
-    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
-    return mat
-
-
 wall_mat = make_uv_mat("WallMaterial", "wall_24_38m_x24_85.jpeg")
 roof_mat = make_uv_mat("RoofMaterial", "tiles_066m_1m.jpg")
 
@@ -151,8 +150,8 @@ obj.data.materials.append(roof_mat)  # slot 1
 # 6) Compute repeats from real dims ---------------------------------------
 # 1 BU = 1 m in BLOSM
 bb = [obj.matrix_world @ mathutils.Vector(c) for c in obj.bound_box]
-xs = [v.x for v in bb];
-ys = [v.y for v in bb];
+xs = [v.x for v in bb]
+ys = [v.y for v in bb]
 zs = [v.z for v in bb]
 width_m = max(xs) - min(xs)
 depth_m = max(ys) - min(ys)

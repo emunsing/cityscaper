@@ -4,3 +4,6 @@ data/rezoning_D_output.RDS filter=lfs diff=lfs merge=lfs -text
 data/rezoning_F_output.RDS filter=lfs diff=lfs merge=lfs -text
 data/*.csv filter=lfs diff=lfs merge=lfs -text
 data/*.txt filter=lfs diff=lfs merge=lfs -text
+data/*.RDS filter=lfs diff=lfs merge=lfs -text
+data/five_rezonings_nongeo.RDS filter=lfs diff=lfs merge=lfs -text
+data/sf_map.RDS filter=lfs diff=lfs merge=lfs -text

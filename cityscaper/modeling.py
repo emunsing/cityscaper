@@ -69,12 +69,10 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
 
     developed_site_years = {}
     for mapblklot, pdev in development_candidates[pdev_metric].items():
-        if mapblklot in developed_site_years:
+        if development_candidates.loc[mapblklot, 'ZONING'] == ZONING_OVERRIDE_STRING:
+            developed_site_years[mapblklot] = 0  # Override lots are considered developed in year 0
             continue
-        for yr in range(simulation_years+1):
-            if development_candidates.loc[mapblklot, 'ZONING'] == ZONING_OVERRIDE_STRING:
-                developed_site_years[mapblklot] = 0
-                break
+        for yr in range(1, simulation_years+1):
             if np.random.rand() <= pdev / pdev_correction_factor:
                 developed_site_years[mapblklot] = yr
                 break

@@ -4,10 +4,12 @@ Blender building generation module.
 This module provides functions to generate 3D buildings in Blender based on
 parcel coordinates and height specifications.
 """
-
+import os
+import csv
 import sys
 import bpy
 import bmesh
+import json
 import math
 import mathutils
 from typing import List, Tuple, Optional, Dict, Any
@@ -391,6 +393,22 @@ def run_sample_multiple_buildings():
                                 parcel_specs=parcels,
                                 )
 
+def run_sample_from_files():
+    # integration test / cli alternative
+    geometry_file = os.path.expanduser("~/src/cityscaper/data/sf_map_unfiltered.json")
+    csv_path = os.path.expanduser("~/Desktop/rezoning_output.csv")
+    with open(geometry_file, "r") as f:
+        geom_data = json.load(f)
+
+    with open(csv_path, newline="") as f:
+        parcels = list(csv.DictReader(f))
+
+    generate_multiple_buildings(
+        geom_data=geom_data,
+        parcel_specs=parcels,
+        building_prefix="Building"
+    )
+
 
 if __name__ == "__main__":
-    run_sample_building()
+    run_sample_from_files()

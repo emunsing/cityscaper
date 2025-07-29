@@ -67,7 +67,7 @@ def model(geom_select,
                                       override_csv=override_csv)
 
      resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
-     developed_site_data[EXPORT_FIELDS + ['development_study_year']].to_csv(resolved_fname)
+     developed_site_data[EXPORT_FIELDS + ['development_study_year']].sort_values(by='development_study_year').to_csv(resolved_fname, index=True, index_label='mapblklot')
      logger.info("Development simulation results saved to %s", resolved_fname)
 
 if __name__ == "__main__":

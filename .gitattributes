@@ -8,3 +8,5 @@ data/*.RDS filter=lfs diff=lfs merge=lfs -text
 data/five_rezonings_nongeo.RDS filter=lfs diff=lfs merge=lfs -text
 data/sf_map.RDS filter=lfs diff=lfs merge=lfs -text
 data/input_scenarios/duboce_triangle_overrides.csv filter=lfs diff=lfs merge=lfs -text
+data/sf_map.json filter=lfs diff=lfs merge=lfs -text
+data/sf_map_unfiltered.json filter=lfs diff=lfs merge=lfs -text

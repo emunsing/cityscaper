@@ -25,7 +25,7 @@ def parse_geojson_rds(input_fname: os.PathLike, output_fname: os.PathLike):
     output_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
     geom_json = geojson_rds_to_json(input_fname)
     clean_geom = geojson_to_parcel_bounds(geom_json)
-    os.makedirs(output_fname, exist_ok=True)
+    os.makedirs(output_fname.parent, exist_ok=True)
     with open(output_fname, 'w') as outfile:
         json.dump(clean_geom, outfile)
     logger.info(f"GeoJSON data from {input_fname} successfully saved to {output_fname}")
@@ -36,16 +36,18 @@ def parse_geojson_rds(input_fname: os.PathLike, output_fname: os.PathLike):
 @click.option('--simulation_years', default=10, type=int, help='Number of years to simulate development')
 @click.option('--random_seed', default=None, type=int, help='Random seed for reproducibility')
 @click.option('--pdev_metric', default='pdev_1yr', type=str, help='Metric to use for probability of development')
+@click.option('--pdev_multiplier', default=1.0, type=float, help='Multiplier to correct BlueSky model to actual city probability/yield')
 @click.option('--rezoning_scenario', default='baseline', type=click.Choice(REZONING_CODES.keys()), help='Rezoning scenario to use')
 @click.option('--override_csv', default=None, type=click.Path(exists=True, dir_okay=False), help='CSV file with overrides for specific lots')
 @click.option('--output_fname', default='rezoning_output.csv', type=click.Path(dir_okay=False), help='Output filename for the development simulation results')
 def model(geom_select,
-              simulation_years,
-              random_seed,
-              pdev_metric,
-              rezoning_scenario,
-              override_csv,
-              output_fname):
+          simulation_years,
+          random_seed,
+          pdev_metric,
+          pdev_multiplier,
+          rezoning_scenario,
+          override_csv,
+          output_fname):
      """
      Create a CSV of sites which are developed, and the years when they are developed, based on a parcel-by-year simulation.
      NOTE: Because of likely negative latitude values, need to put geom_select at the end of the options and separated by `--` like `$ model <options> -- -122 49 -121.5 49.5`
@@ -56,11 +58,16 @@ def model(geom_select,
      """
      # assert len(geom_string.split(',')) == 4, "geom_string must contain exactly four comma-separated values"
      # geom_select = tuple(map(float, geom_string.split(',')))
-     developed_site_data = pdev_model(geom_select, simulation_years, random_seed,
-                                      pdev_metric, rezoning_scenario, override_csv)
+     developed_site_data = pdev_model(geom_select=geom_select,
+                                      simulation_years=simulation_years,
+                                      random_seed=random_seed,
+                                      pdev_metric=pdev_metric,
+                                      pdev_correction_factor=pdev_multiplier,
+                                      rezoning_scenario=rezoning_scenario,
+                                      override_csv=override_csv)
 
      resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
-     developed_site_data[EXPORT_FIELDS].to_csv(resolved_fname)
+     developed_site_data[EXPORT_FIELDS + ['development_study_year']].to_csv(resolved_fname)
      logger.info("Development simulation results saved to %s", resolved_fname)
 
 if __name__ == "__main__":

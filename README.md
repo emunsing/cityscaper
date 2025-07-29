@@ -1,5 +1,20 @@
 # Notes
 
+## Entry points:
+
+Python data processing:
+- main.py: 
+  - Parse sf_map.RDS file to parcel lat/lon dict, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047` 
+  - Run pdev simulation for a geometry, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047`
+
+Blender scripting:
+- blender_building.py:  Runs from within Blender in the scripting pane:
+   - run_sample_building: single-building integration test
+   - run_sample_multiple_buildings: Multi-building integration test
+- blender_cli.py: NOT TESTED
+   - Intended for combined blender+python command line scripting, like `$ blender --background --python blender_cli.py -- --input_geom <path/to/geometry.json> --input_parcels <path/to/developed_parcel_height.csv>`
+
+
 ## Blender Python Scripting
 
 ### Blender Python scripting

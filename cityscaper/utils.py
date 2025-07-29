@@ -43,3 +43,7 @@ def geojson_rds_to_json(fname):
     assert 'properties' in obj0, "No properties found in the geometry data!"
     assert 'geometry' in obj0, "No geometry found in the geometry data!"
     return geom_json
+
+
+def geojson_to_parcel_bounds(geojson:dict) -> dict:
+    return {f['properties']['mapblklot']: f['geometry']['coordinates'] for f in geojson['features']}

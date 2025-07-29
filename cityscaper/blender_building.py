@@ -185,9 +185,15 @@ def create_building_mesh(parcel_xy: List[Tuple[float, float]],
     Returns:
         Blender object containing the building mesh
     """
+    # Create or get a dedicated collection for buildings
+    buildings_collection = bpy.data.collections.get("Generated Buildings")
+    if buildings_collection is None:
+        buildings_collection = bpy.data.collections.new("Generated Buildings")
+        bpy.context.scene.collection.children.link(buildings_collection)
+    
     mesh = bpy.data.meshes.new(f"{building_name}Mesh")
     obj = bpy.data.objects.new(building_name, mesh)
-    bpy.context.collection.objects.link(obj)
+    buildings_collection.objects.link(obj)
 
     bm = bmesh.new()
     verts = [bm.verts.new((x, y, ground_z)) for x, y in parcel_xy]
@@ -244,6 +250,11 @@ def apply_materials_and_uvs(obj: bpy.types.Object,
     if not obj.data.uv_layers:
         obj.data.uv_layers.new(name="UVMap")
 
+    # Select only our building object and make it active
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    
     # Apply cube projection
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
@@ -333,10 +344,15 @@ def generate_multiple_buildings(geom_data: dict[str, List[List[List[float]]]],
                                 building_prefix: str = "Building",
                                 raise_err=True) -> None:
     """
+    Generate multiple buildings from geometry data and parcel specifications.
+    
+    This function processes multiple parcels and creates buildings for each one.
+    
     Args:
         geom_data: dictionary of geometry keyed by mapblklot
         parcel_specs: list of parcel spec dictionaries; must contain 'mapblklot' and 'height'
         building_prefix: Prefix for building object names
+        raise_err: Whether to raise exceptions or continue on errors
     """
     successful_buildings, total_parcels = 0, len(parcel_specs)
 

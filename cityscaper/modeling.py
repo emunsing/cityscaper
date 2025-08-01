@@ -10,17 +10,16 @@ UNFILTERED_REZONING_DATA = DATA_DIR / "five_rezonings_nongeo_unfiltered.rds"
 GEOM_DATA_UNFILTERED = DATA_DIR / "sf_map_unfiltered.rds"
 ZONING_OVERRIDE_STRING = "Override"
 
-def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.76874, -122.43060, 37.77047),
-               simulation_years: int = 50,
-               random_seed: int = None,
-               pdev_metric: str = 'pdev_1yr',
-               pdev_correction_factor: float = 1.0,
-               rezoning_scenario: str = 'apr_2025',
-               override_csv: os.PathLike | None = None,
-               unfilterered_rezoning_data_rds: os.PathLike = UNFILTERED_REZONING_DATA,
-               geom_data_rds: os.PathLike = GEOM_DATA_UNFILTERED,
-               ) -> pd.DataFrame:
+def get_site_data(geom_select: tuple[float, float, float, float] = (-122.43270, 37.76874, -122.43060, 37.77047),
+                  rezoning_scenario: str = 'apr_2025',
+                  override_csv: os.PathLike | None = None,
+                  random_seed: int | None = None,
+                  unfilterered_rezoning_data_rds: os.PathLike = UNFILTERED_REZONING_DATA,
+                  geom_data_rds: os.PathLike = GEOM_DATA_UNFILTERED,
+                  ) -> pd.DataFrame:
 
+    if random_seed:
+        np.random.seed(random_seed)
     height_estimator_func = lambda df: (df['height'] * (np.random.rand(df.shape[0]) * 0.5 + 0.5)) // 5 * 5
 
     assert rezoning_scenario in REZONING_CODES.keys(), f"Rezoning scenario must be one of {REZONING_CODES.keys()}"
@@ -38,16 +37,14 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
             1 - rezoning_scenario_data['pdev']) ** 0.1  # Assume 10-year generating scenario
     rezoning_scenario_data['developed_height'] = height_estimator_func(rezoning_scenario_data)
 
-    if random_seed:
-        np.random.seed(random_seed)
-
     if override_csv:
         # TODO: Handle lot mergers in the override csv
         override_lots = pd.read_csv(override_csv, index_col='mapblklot')
         assert 'height' in override_lots.columns, "Overrides must contain mapblklot and heights"
         lots_needing_data = override_lots.index.difference(rezoning_scenario_data.index)
         if len(lots_needing_data) > 0:
-            logger.warning(f"Override lots {', '.join(lots_needing_data)} are not in rezoning scenario data, loading unfiltered data- are they in the Pipeline?")
+            logger.warning(
+                f"Override lots {', '.join(lots_needing_data)} are not in rezoning scenario data, loading unfiltered data- are they in the Pipeline?")
             unfiltered_rezoning_data = read_rds_to_df(unfilterered_rezoning_data_rds, index_cols='mapblklot')
             auxiliary_lots = lots_needing_data.intersection(unfiltered_rezoning_data.index)
             raw_geom_geojson = geojson_to_parcel_bounds(geojson_rds_to_json(geom_data_rds))
@@ -61,11 +58,22 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
         rezoning_scenario_data.loc[lots_with_overrides, 'pdev_1yr'] = 1
         rezoning_scenario_data.loc[lots_with_overrides, 'ZONING'] = ZONING_OVERRIDE_STRING
         rezoning_scenario_data.loc[lots_with_overrides, 'height'] = override_lots.loc[lots_with_overrides, 'height']
-        rezoning_scenario_data.loc[lots_with_overrides, 'developed_height'] = override_lots.loc[lots_with_overrides, 'height']
+        rezoning_scenario_data.loc[lots_with_overrides, 'developed_height'] = override_lots.loc[
+            lots_with_overrides, 'height']
 
     lots_in_region = latlon_filter(rezoning_scenario_data, *geom_select)
     development_candidates = lots_in_region[lots_in_region['ZONING'].notnull()].copy()
-    development_candidates = development_candidates.groupby(level='mapblklot').first()  # Remove duplicates
+    development_candidates = development_candidates.groupby(level='mapblklot').first()
+    return development_candidates
+
+def lotwise_pdev_sim(development_candidates: pd.DataFrame,
+                     simulation_years: int = 50,
+                     random_seed: int = None,
+                     pdev_metric: str = 'pdev_1yr',
+                     pdev_correction_factor: float = 1.0,
+                     ) -> pd.DataFrame:
+    if random_seed:
+        np.random.seed(random_seed)
 
     developed_site_years = {}
     for mapblklot, pdev in development_candidates[pdev_metric].items():
@@ -79,4 +87,34 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
     developed_site_years = pd.Series(developed_site_years, name='development_study_year')
 
     developed_site_data = development_candidates.join(developed_site_years, how='right')
+    return developed_site_data
+
+def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.76874, -122.43060, 37.77047),
+               simulation_years: int = 50,
+               random_seed: int = None,
+               pdev_metric: str = 'pdev_1yr',
+               pdev_correction_factor: float = 1.0,
+               rezoning_scenario: str = 'apr_2025',
+               override_csv: os.PathLike | None = None,
+               unfilterered_rezoning_data_rds: os.PathLike = UNFILTERED_REZONING_DATA,
+               geom_data_rds: os.PathLike = GEOM_DATA_UNFILTERED,
+               ) -> pd.DataFrame:
+
+    development_candidates = get_site_data(
+        geom_select=geom_select,
+        rezoning_scenario=rezoning_scenario,
+        override_csv=override_csv,
+        random_seed=random_seed,
+        unfilterered_rezoning_data_rds=unfilterered_rezoning_data_rds,
+        geom_data_rds=geom_data_rds
+    )
+
+    developed_site_data = lotwise_pdev_sim(
+        development_candidates=development_candidates,
+        simulation_years=simulation_years,
+        random_seed=random_seed,
+        pdev_metric=pdev_metric,
+        pdev_correction_factor=pdev_correction_factor
+    )
+
     return developed_site_data

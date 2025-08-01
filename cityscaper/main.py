@@ -5,7 +5,7 @@ import os
 import json
 from cityscaper.constants import DATA_DIR, OUTPUT_DIR, EXPORT_FIELDS, REZONING_CODES
 from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bounds, resolve_path
-from cityscaper.modeling import pdev_model
+from cityscaper.modeling import pdev_model, get_site_data
 import click
 import logging
 
@@ -29,6 +29,38 @@ def parse_geojson_rds(input_fname: os.PathLike, output_fname: os.PathLike):
     with open(output_fname, 'w') as outfile:
         json.dump(clean_geom, outfile)
     logger.info(f"GeoJSON data from {input_fname} successfully saved to {output_fname}")
+
+@cli.command()
+@click.argument('geom_select', type=float, nargs=4)
+@click.option('--random_seed', default=None, type=int, help='Random seed for reproducibility')
+@click.option('--rezoning_scenario', default='baseline', type=click.Choice(REZONING_CODES.keys()), help='Rezoning scenario to use')
+@click.option('--override_csv', default=None, type=click.Path(exists=True, dir_okay=False), help='CSV file with overrides for specific lots')
+@click.option('--output_fname', default='rezoning_output.csv', type=click.Path(dir_okay=False), help='Output filename for the development simulation results')
+@click.option('--all-fields', is_flag=True, help='Export only the fields specified in EXPORT_FIELDS')
+def site_data(geom_select,
+              random_seed,
+              rezoning_scenario,
+              override_csv,
+              output_fname,
+              all_fields):
+    development_candidates = get_site_data(
+        geom_select=geom_select,
+        rezoning_scenario=rezoning_scenario,
+        override_csv=override_csv,
+        random_seed=random_seed,
+    )
+    resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
+
+    if not all_fields:
+        development_candidates = development_candidates[EXPORT_FIELDS]
+    development_candidates = development_candidates.sort_values(by='mapblklot')
+
+    if '.csv' in output_fname:
+        development_candidates.to_csv(resolved_fname, index=True, index_label='mapblklot')
+
+    if '.pqt' in output_fname or '.parquet' in output_fname:
+        development_candidates.to_parquet(resolved_fname, index=True, index_label='mapblklot')
+
 
 
 @cli.command()

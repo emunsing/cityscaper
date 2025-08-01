@@ -19,6 +19,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 jupyter = "*"
 ipykernel = "*"
+pyarrow = "*"
 matplotlib = "*"
 python-dotenv = "*"
 black = "*"

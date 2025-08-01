@@ -2,10 +2,12 @@
 Pre-processing data before Blender
 """
 import os
+import csv
 import json
 from cityscaper.constants import DATA_DIR, OUTPUT_DIR, EXPORT_FIELDS, REZONING_CODES
 from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bounds, resolve_path
 from cityscaper.modeling import pdev_model, get_site_data
+from cityscaper.geom import kml_from_latlon
 import click
 import logging
 
@@ -29,6 +31,29 @@ def parse_geojson_rds(input_fname: os.PathLike, output_fname: os.PathLike):
     with open(output_fname, 'w') as outfile:
         json.dump(clean_geom, outfile)
     logger.info(f"GeoJSON data from {input_fname} successfully saved to {output_fname}")
+
+@cli.command()
+@click.argument('csv_path', type=click.Path(exists=True, dir_okay=False))
+@click.argument('output_fname', type=click.Path(dir_okay=False))
+@click.option ('--geometry_file', type=click.Path(exists=True, dir_okay=False), default=DATA_DIR / 'sf_map_unfiltered.json',)
+def build_kml(
+        csv_path,
+        output_fname,
+        geometry_file,
+):
+    with open(geometry_file, "r") as f:
+        geom_data = json.load(f)
+
+    with open(csv_path, newline="") as f:
+        parcel_specs = list(csv.DictReader(f))
+
+    kml = kml_from_latlon(parcel_specs=parcel_specs,
+                          geom_data=geom_data,)
+
+    resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
+    with open(resolved_fname, 'w') as kml_file:
+        kml_file.write(kml)
+
 
 @cli.command()
 @click.argument('geom_select', type=float, nargs=4)

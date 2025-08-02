@@ -37,3 +37,23 @@ How might we design?
 * for non building space, default to grass
     * rules for adding trees or benches?
     * Cafe tables?
+
+
+# General thoughts
+
+## What do we need to care about in base polygon
+
+* easements?? (not now)
+* set backs
+* FAR (height * base)
+* sufficient width to he habitable
+* diagonal max
+* take into account large or small site, and special use district
+
+
+## Flow
+
+* for each parcel, figure out which SUDs/lotsize things/zoning apply
+* logic to get front set back, back set back, FAR, etc
+* take those values and parcel and generate base polygon
+

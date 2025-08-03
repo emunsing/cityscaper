@@ -44,12 +44,25 @@ def build_contiguous_line_string(group_rec):
         this_node = prev_node
         prev_node = prev_node.prev
 
+    if count == max_count:
+        for line, row in group_rec.iterrows():
+            print(line)
+            print(row)
+        raise ValueError("Failed to build contiguous line string. overrun chain construction")
+
     start_node = this_node
     line_list = [start_node.line]
 
-    while this_node.next is not None:
+    count = 0
+    while this_node.next is not None and count < max_count:
+        count += 1
         this_node = this_node.next
         line_list.append(this_node.line)
+    if count == max_count:
+        for line, row in group_rec.iterrows():
+            print(line)
+            print(row)
+        raise ValueError("Failed to build contiguous line string. overrun origin search")
 
     coords_list = [line_list[0].coords[0]]
     for line in line_list:

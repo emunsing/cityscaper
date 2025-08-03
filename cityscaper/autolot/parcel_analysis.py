@@ -11,13 +11,15 @@ from cityscaper.autolot.utils import get_nearest_parcels
 from shapely.ops import nearest_points
 from shapely.geometry import Point
 from shapely.ops import split as shapely_split
+from loguru import logger
+import traceback
 
 def get_front_point(front_group_rec, use_shortest_line=False, min_segment_length = 3):
     front_line_string = build_contiguous_line_string(front_group_rec)
     angle_between_ends = get_first_to_final_angle(front_line_string)
     if (angle_between_ends < np.pi / 3.0):
         use_shortest_line = False
-        print("Overriding use_shortest_line to False because angle between ends is too small to warrant it")
+        logger.info("Overriding use_shortest_line to False because angle between ends is too small to warrant it")
     if use_shortest_line:
 
         best_candidate = None
@@ -94,7 +96,7 @@ def get_boundary_props(parcel_ser, blockid, street_buffer=None, cut_off_prop=0.5
         if street_buffer is not None:
             entry["dist_from_street"] = ext_line.distance(street_buffer)
         if original_ext_line in prop_rec:
-            print("warning: duplicate line")
+            logger.warning("duplicate line")
         prop_rec[original_ext_line] = pd.Series(entry)
     if current_segment_group == initial_segment_group:
         map_to_0 = group_id
@@ -145,7 +147,8 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
     try:
         rear_setback = perpendicular_line(front_midpoint, rear_point, length_multiplier=10, center_fraction=0.75)
     except Exception as e:
-        print(f"{blockid} failed with error: {e}")
+        err_str = traceback.format_exc()
+        logger.error(f"{blockid} failed with error: {err_str}")
         rear_setback = None
     # Better approach: use a bounding envelope, choose the lines closest to and
     # farthest from the front, and draw a line between them.
@@ -179,7 +182,8 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
     try:
         envelope_rear_setback = perpendicular_line(envelope_front_midpoint, envelope_rear_point, length_multiplier=10, center_fraction=0.75) #.intersection(target_parcel)
     except Exception as e:
-        print(f"{blockid} failed with error: {e}")
+        err_str = traceback.format_exc()
+        logger.error(f"{blockid} failed with error: {err_str}")
         envelope_rear_setback = rear_setback
 
     # Split the lot along that line. 
@@ -193,10 +197,10 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
             foot_print = cut
             foot_print_dist = front_dist
     if foot_print is None:
-        print(f"{blockid} failed to find a footprint")
+        logger.error(f"{blockid} failed to find a footprint")
         return prop_rec, front_midpoint, rear_point, envelope_rear_setback, target_parcel_envelope
     # Soften any overly narrow protuberances
     MIN_PROTUBERANCE_WIDTH = 3
-    foot_print_double_buff = foot_print.buffer(-MIN_PROTUBERANCE_WIDTH).buffer(MIN_PROTUBERANCE_WIDTH).intersection(foot_print)
+    foot_print_double_buff = foot_print.buffer(-MIN_PROTUBERANCE_WIDTH, join_style=2).buffer(MIN_PROTUBERANCE_WIDTH, join_style=2).intersection(foot_print)
 
     return prop_rec, front_midpoint, rear_point, envelope_rear_setback, target_parcel_envelope, foot_print_double_buff

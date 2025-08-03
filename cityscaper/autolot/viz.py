@@ -16,24 +16,24 @@ def plot_edges(parcel_ser, blockid, ax=None, street_buffer=None, use_shortest_li
         shap_plot.plot_polygon(sb0, ax=ax, color='lightblue', alpha=0.35)
 
 
-    prop_rec, front_midpoint, rear_point, rear_setback, envelope, foot_print = get_sides_df(parcel_ser, blockid, street_buffer=street_buffer, use_shortest_line=use_shortest_line)
+    par = get_sides_df(parcel_ser, blockid, street_buffer=street_buffer, use_shortest_line=use_shortest_line)
 
     adj_color_mapper = {"parcel":"green", "front":"red", "other":"purple"}
-    shap_plot.plot_points(front_midpoint, ax=ax, color='blue', alpha=0.7, marker='*', markersize=10)
-    shap_plot.plot_points(rear_point, ax=ax, color='red', alpha=0.7, marker='8', markersize=10)
+    shap_plot.plot_points(par.front_midpoint, ax=ax, color='blue', alpha=0.7, marker='*', markersize=10)
+    shap_plot.plot_points(par.rear_point, ax=ax, color='red', alpha=0.7, marker='8', markersize=10)
 
     if show_envelope:
-        shap_plot.plot_polygon(envelope, ax=ax, color='lightgreen', alpha=0.2)
+        shap_plot.plot_polygon(par.target_parcel_envelope, ax=ax, color='lightgreen', alpha=0.2)
 
-    shap_plot.plot_polygon(foot_print, ax=ax, color='lightblue', alpha=0.5,
+    shap_plot.plot_polygon(par.foot_print_double_buff, ax=ax, color='lightblue', alpha=0.5,
     )
 
-    if rear_setback is not None:
-        shap_plot.plot_line(rear_setback, ax=ax, color='black', alpha=0.7, linewidth=1, add_points=False)
+    if par.rear_point is not None:
+        shap_plot.plot_line(par.envelope_rear_setback, ax=ax, color='black', alpha=0.7, linewidth=1, add_points=False)
 
-    for line, details in prop_rec.iterrows():
+    for line, details in par.prop_rec.iterrows():
         shap_plot.plot_line(line, ax=ax, color=adj_color_mapper[details["adj"]], alpha=0.7, linewidth=4, add_points=False)
 
     if ax is not None:
         ax.set_title(blockid)
-    return prop_rec
+    return par.prop_rec

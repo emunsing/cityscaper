@@ -2,7 +2,7 @@ from cityscaper.autolot.utils import build_contiguous_line_string, get_first_to_
 import shapely
 import numpy as np
 import geopandas as gpd
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 import itertools
 from cityscaper.autolot.utils import perpendicular_line
 from cityscaper.autolot.utils import MIN_FRONT_LENGTH
@@ -13,6 +13,7 @@ from shapely.geometry import Point
 from shapely.ops import split as shapely_split
 from loguru import logger
 import traceback
+from dataclasses import dataclass
 
 def get_front_point(front_group_rec, use_shortest_line=False, min_segment_length = 3):
     front_line_string = build_contiguous_line_string(front_group_rec)
@@ -107,6 +108,17 @@ def get_boundary_props(parcel_ser, blockid, street_buffer=None, cut_off_prop=0.5
     prop_rec.loc[prop_rec["group_id"] == map_to_0, "group_id"] = 0
     return prop_rec
 
+
+@dataclass
+class ParcelAnalysisResult:
+    prop_rec: pd.DataFrame
+    front_midpoint: Point
+    rear_point: Point
+    envelope_rear_setback: LineString
+    target_parcel_envelope: Polygon
+    front_group_rec: pd.DataFrame
+    foot_print_double_buff: Polygon
+
 def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=False):
     # Extract the target parcel from the parcel series
     target_parcel = parcel_ser.loc[blockid]
@@ -114,8 +126,33 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
     prop_rec = get_boundary_props(parcel_ser, blockid, street_buffer=street_buffer)
     # Augment with adjacency information and segment groups
     prop_rec, front_group_rec = parcel_adjacency(prop_rec)
-    # Find its midpoint (lots of options in here)
-    front_midpoint = get_front_point(front_group_rec, use_shortest_line=use_shortest_line)
+    
+    try:
+        # Find its midpoint (lots of options in here)
+        front_midpoint = get_front_point(front_group_rec, use_shortest_line=use_shortest_line)
+    except Exception as e:
+        err_str = traceback.format_exc()
+        logger.error(f"{blockid} failed with error: {err_str}")
+        target_parcel = target_parcel.buffer(0).simplify(0.25)
+
+        # Get the boundary properties of the target parcel (one row for each boundary segment)
+        prop_rec = get_boundary_props(parcel_ser, blockid, street_buffer=street_buffer)
+        # Augment with adjacency information and segment groups
+        prop_rec, front_group_rec = parcel_adjacency(prop_rec)
+        try:
+            front_midpoint = get_front_point(front_group_rec, use_shortest_line=use_shortest_line)
+        except Exception as e:
+            err_str = traceback.format_exc()
+            logger.error(f"{blockid} failed with error: {err_str}")
+            front_midpoint = None
+            return ParcelAnalysisResult(
+                prop_rec=None,
+                front_midpoint=None,
+                rear_point=None,
+                envelope_rear_setback=None,
+                target_parcel_envelope=None,
+                front_group_rec=None,
+                foot_print_double_buff=target_parcel.buffer(20).oriented_envelope)
     # TODO: handle multi-polygon parcels
     assert len(target_parcel.geoms) == 1, "Multi-polygon parcels are not supported"
     parcel_ex = target_parcel.geoms[0].exterior
@@ -203,4 +240,13 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
     MIN_PROTUBERANCE_WIDTH = 3
     foot_print_double_buff = foot_print.buffer(-MIN_PROTUBERANCE_WIDTH, join_style=2).buffer(MIN_PROTUBERANCE_WIDTH, join_style=2).intersection(foot_print)
 
-    return prop_rec, front_midpoint, rear_point, envelope_rear_setback, target_parcel_envelope, foot_print_double_buff
+    par = ParcelAnalysisResult(
+        prop_rec=prop_rec,
+        front_midpoint=front_midpoint,
+        rear_point=rear_point,
+        envelope_rear_setback=envelope_rear_setback,
+        target_parcel_envelope=target_parcel_envelope,
+        front_group_rec=front_group_rec,
+        foot_print_double_buff=foot_print_double_buff,
+    )
+    return par

@@ -18,6 +18,7 @@ osmnx = "^2.0.5"
 shapely = "^2.1.1"
 geopandas = "^1.1.1"
 seaborn = "^0.13.2"
+fiona = "^1.10.1"
 [tool.poetry.group.dev]
 optional = true
 [tool.poetry.group.dev.dependencies]

@@ -54,6 +54,6 @@ How might we design?
 ## Flow
 
 * for each parcel, figure out which SUDs/lotsize things/zoning apply
-* logic to get front set back, back set back, FAR, etc
+* logic to get front set back, back set back, FAR, lot coverage, etc
 * take those values and parcel and generate base polygon
 

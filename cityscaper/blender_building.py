@@ -117,7 +117,7 @@ def make_uv_mat(name: str, img_path: str) -> bpy.types.Material:
 
     texco = nt.nodes.new("ShaderNodeTexCoord")
     tex = nt.nodes.new("ShaderNodeTexImage")
-    tex.image = bpy.data.images.load(bpy.path.abspath(f"//{img_path}"))
+    tex.image = bpy.data.images.load(bpy.path.abspath(f"/Users/eric/Documents/dtna/rezoning/blender/{img_path}"))
     tex.extension = 'REPEAT'
     bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -171,7 +171,7 @@ def get_ground_elevation(parcel_xy: List[Tuple[float, float]],
 
 def create_building_mesh(parcel_xy: List[Tuple[float, float]], 
                         height_meters: float,
-                        ground_z: float,
+                        ground_z: float=0.0,
                         building_name: str = "Building") -> bpy.types.Object:
     """
     Create a building mesh by extruding the parcel footprint.
@@ -206,6 +206,8 @@ def create_building_mesh(parcel_xy: List[Tuple[float, float]],
     for e in res["geom"]:
         if isinstance(e, bmesh.types.BMVert):
             e.co.z += height_meters
+
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 
     bm.to_mesh(mesh)
     bm.free()

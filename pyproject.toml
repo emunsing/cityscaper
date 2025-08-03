@@ -8,19 +8,18 @@ readme = "README.md"
 [tool.poetry.dependencies]
 # Note: BPy currently requires Python 3.11
 python = "3.11.*"
+numpy = "<2.0.0"
+pandas = "<2.0.0"
 mathutils = "*"
 pyreadr = "*"
-pandas = "*"
+bpy = "*"
 
 
 # DEV DEPDENDENCIES - Jupyter, visualizations, etc. Add these like `$ poetry install --with dev`
-osmnx = "^2.0.5"
-shapely = "^2.1.1"
-geopandas = "^1.1.1"
-seaborn = "^0.13.2"
 [tool.poetry.group.dev]
 optional = true
 [tool.poetry.group.dev.dependencies]
+seaborn = "^0.13.2"
 jupyter = "*"
 ipykernel = "*"
 pyarrow = "*"
@@ -28,6 +27,13 @@ matplotlib = "*"
 python-dotenv = "*"
 black = "*"
 pytest = "*"
+
+[tool.poetry.group.geo]
+optional = true
+[tool.poetry.group.geo.dependencies]
+osmnx = "*"
+shapely = "*"
+geopandas = "*"
 
 [build-system]
 requires = ["poetry-core"]

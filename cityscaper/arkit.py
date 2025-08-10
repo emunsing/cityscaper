@@ -98,6 +98,83 @@ def create_dae_for_xy_building(parcel_xy, height_meters, building_name, export_d
     )
 
 
+def clear_scene():
+    # delete all mesh objects
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete(use_global=False)
+    # also purge orphan data
+    for block in bpy.data.meshes:
+        if block.users == 0:
+            bpy.data.meshes.remove(block)
+
+@cli.command()
+@click.option("--input-dir",  required=True,
+              type=click.Path(exists=True, file_okay=False),
+              help="Folder containing .dae files to convert")
+@click.option("--export-dir", required=True,
+              type=click.Path(file_okay=False),
+              help="Where to write the .usdz files")
+@click.option("--export-format", default="{fname}.usdz",
+              help="Python format string for output filename; use {fname} for basename")
+def dae_to_usd(input_dir, export_dir, export_format):
+    os.makedirs(export_dir, exist_ok=True)
+
+    dae_files = sorted(
+        f for f in os.listdir(input_dir)
+        if f.lower().endswith(".dae")
+    )
+    if not dae_files:
+        click.echo("No .dae files found in %s" % input_dir)
+        return
+
+    for dae in dae_files:
+        fname = os.path.splitext(dae)[0]
+        dae_path = os.path.join(input_dir, dae)
+        usdz_name = export_format.format(fname=fname)
+        usdz_path = os.path.join(export_dir, usdz_name)
+
+        click.echo(f"Converting {dae} → {usdz_name}")
+
+        # 1) Clear any existing objects
+        clear_scene()
+
+        # 2) Import the COLLADA file
+        bpy.ops.wm.collada_import(
+            filepath=dae_path,
+            filter_collada=True,
+            filter_folder=True,
+            filter_blender=False
+        )
+
+        # 3) Select all imported objects
+        for obj in bpy.context.scene.objects:
+            obj.select_set(False)
+        for obj in bpy.context.selected_objects:
+            obj.select_set(False)
+        # The import operator should auto-select; to be safe:
+        for obj in bpy.context.scene.objects:
+            if obj.type in {"MESH", "EMPTY", "ARMATURE"}:
+                obj.select_set(True)
+
+        # 4) Export to USDZ with your settings
+        bpy.ops.wm.usd_export(
+            filepath=usdz_path,
+            filter_usd=True,
+            selected_objects_only=True,
+            visible_objects_only=True,
+            use_instancing=True,
+            export_meshes=True,
+            export_materials=True,
+            export_normals=True,
+            triangulate_meshes=True,
+            convert_scene_units='METERS',
+            meters_per_unit=1,
+            convert_orientation=True,
+            export_global_forward_selection='Y',
+            export_global_up_selection='Z'
+        )
+
+
 @cli.command()
 @click.argument('csv_path', type=click.Path(exists=True, dir_okay=False))
 @click.option('--geometry_file', type=click.Path(exists=True, dir_okay=False), default=os.path.expanduser("~/src/cityscaper/data/sf_map_unfiltered.json"))
@@ -144,7 +221,7 @@ def build_dae_from_csv( csv_path, geometry_file, building_prefix, export_dir, ra
             else:
                 continue
 
-    with open(os.path.join(export_dir, 'building_centroids.json'), 'w') as f:
+    with open(os.path.join(export_dir, f'{building_prefix}_centroids.json'), 'w') as f:
         json.dump(building_centroids, f, indent=4)
 
     print("Done generating buildings")

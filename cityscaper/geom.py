@@ -38,7 +38,7 @@ def kml_from_latlon(parcel_specs, geom_data)-> str:
     for i, row in enumerate(parcel_specs):
         lot = row["mapblklot"]
         try:
-            height = float(row["height"])
+            height = float(row["developed_height"])
             parcel_bounds = geom_data[lot]
             for j, polygon in enumerate(parcel_bounds):
                 building_name = f"{lot}_{j+1}"

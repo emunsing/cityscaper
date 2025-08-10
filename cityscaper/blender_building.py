@@ -287,7 +287,7 @@ def get_ground_elevation(parcel_xy: List[Tuple[float, float]],
 
 def create_building_mesh(parcel_xy: List[Tuple[float, float]], 
                         height_meters: float,
-                        ground_z: float,
+                        ground_z: float=0.0,
                         building_name: str = "Building") -> bpy.types.Object:
     """
     Create a building mesh by extruding the parcel footprint.
@@ -322,6 +322,8 @@ def create_building_mesh(parcel_xy: List[Tuple[float, float]],
     for e in res["geom"]:
         if isinstance(e, bmesh.types.BMVert):
             e.co.z += height_meters
+
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 
     bm.to_mesh(mesh)
     bm.free()

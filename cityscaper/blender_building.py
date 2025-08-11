@@ -9,6 +9,7 @@ import csv
 import sys
 import bpy
 import bmesh
+import random
 import json
 import math
 import mathutils
@@ -344,7 +345,6 @@ def apply_materials_and_uvs(obj: bpy.types.Object,
         roof_texture_path: Full path to roof texture file
         transition_frame: Frame to transition from red to textured (None for static materials)
     """
-    # Paths are already complete
     
     # Create materials based on whether animation is requested
     if transition_frame is not None:
@@ -496,6 +496,29 @@ def group_parcels_by_year(parcel_specs: list[dict[str, Any]]) -> dict[int, list[
     return parcels_by_year
 
 
+def get_wall_texture_path(height: float|int) -> str:
+    if height < 100:
+        wall_filename = random.choice(short_wall_textures)
+        wall_texture_path = str(short_wall_textures_dir / wall_filename)
+    elif height > 150:
+        wall_filename = random.choice(high_wall_textures)
+        wall_texture_path = str(high_wall_textures_dir / wall_filename)
+    else:
+        wall_filename = random.choice(wall_textures)
+        wall_texture_path = str(wall_textures_dir / wall_filename)
+    return wall_texture_path
+
+def get_roof_texture_path() -> str:
+    """
+    Get a random roof texture path.
+
+    Returns:
+        Full path to a randomly selected roof texture file
+    """
+    roof_filename = random.choice(roof_textures)
+    return str(roof_textures_dir / roof_filename)
+
+
 def generate_multiple_buildings(geom_data: dict[str, List[List[List[float]]]],
                                 parcel_specs: list[dict[str, Any]],
                                 building_prefix: str = "Building",
@@ -510,10 +533,6 @@ def generate_multiple_buildings(geom_data: dict[str, List[List[List[float]]]],
         raise_err: Whether to raise exceptions or continue on errors
     """
     successful_buildings, total_parcels = 0, len(parcel_specs)
-    short_wall_index = 0
-    wall_index = 0
-    high_wall_index = 0
-    roof_index = 0
 
     for i, row in enumerate(parcel_specs):
         lot = row["mapblklot"]
@@ -524,26 +543,9 @@ def generate_multiple_buildings(geom_data: dict[str, List[List[List[float]]]],
             parcel_bounds = geom_data[lot]
             for j, polygon in enumerate(parcel_bounds):
                 # Get current textures with full paths
-                if height < 100:
-                    wall_filename = short_wall_textures[short_wall_index % len(short_wall_textures)]
-                    wall_texture_path = str(short_wall_textures_dir / wall_filename)
-                    short_wall_index += 1
-                    print(f"Building {lot} height {height}: Using SHORT texture {wall_filename}")
-                elif height > 150:
-                    wall_filename = high_wall_textures[high_wall_index % len(high_wall_textures)]
-                    wall_texture_path = str(high_wall_textures_dir / wall_filename)
-                    high_wall_index += 1
-                    print(f"Building {lot} height {height}: Using HIGH texture {wall_filename}")
-                else:
-                    wall_filename = wall_textures[wall_index % len(wall_textures)]
-                    wall_texture_path = str(wall_textures_dir / wall_filename)
-                    wall_index += 1
-                    print(f"Building {lot} height {height}: Using REGULAR texture {wall_filename}")
-                
-                roof_filename = roof_textures[roof_index % len(roof_textures)]
-                roof_texture_path = str(roof_textures_dir / roof_filename)
-                roof_index += 1
-                
+                wall_texture_path = get_wall_texture_path(height)
+                roof_texture_path = get_roof_texture_path()
+
                 building_name = f"{building_prefix}_{lot}_{j+1}"
                 generate_building(polygon, height, building_name, wall_texture_path, roof_texture_path)
                 successful_buildings += 1
@@ -584,10 +586,6 @@ def generate_animated_buildings(geom_data: dict[str, List[List[List[float]]]],
     print(f"Setting up animation for {max_year + 1} years ({bpy.context.scene.frame_end} frames)")
     
     successful_buildings = 0
-    short_wall_index = 0
-    wall_index = 0
-    high_wall_index = 0
-    roof_index = 0
     
     # Process each year
     for year in sorted(parcels_by_year.keys()):
@@ -612,24 +610,9 @@ def generate_animated_buildings(geom_data: dict[str, List[List[List[float]]]],
                     
                 parcel_bounds = geom_data[lot]
                 for j, polygon in enumerate(parcel_bounds):
-                    # Get current textures with full paths
-                    if height < 100:
-                        wall_filename = short_wall_textures[short_wall_index % len(short_wall_textures)]
-                        wall_texture_path = str(short_wall_textures_dir / wall_filename)
-                        short_wall_index += 1
-                    elif height > 180:
-                        wall_filename = high_wall_textures[high_wall_index % len(high_wall_textures)]
-                        wall_texture_path = str(high_wall_textures_dir / wall_filename)
-                        high_wall_index += 1
-                    else:
-                        wall_filename = wall_textures[wall_index % len(wall_textures)]
-                        wall_texture_path = str(wall_textures_dir / wall_filename)
-                        wall_index += 1
-                    
-                    roof_filename = roof_textures[roof_index % len(roof_textures)]
-                    roof_texture_path = str(roof_textures_dir / roof_filename)
-                    roof_index += 1
-                    
+                    wall_texture_path = get_wall_texture_path(height)
+                    roof_texture_path = get_roof_texture_path()
+
                     # Create building with material transition animation
                     building_name = f"{building_prefix}_Y{year}_{lot}_{j+1}"
                     transition_frame = appear_frame + 15  # 0.5 seconds after appearance at 30fps

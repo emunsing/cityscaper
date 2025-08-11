@@ -5,7 +5,12 @@ import sys
 import os
 import csv
 import json
-from cityscaper.blender_building import TransverseMercator, make_uv_mat, create_building_mesh, apply_materials_and_uvs
+from cityscaper.blender_building import (TransverseMercator, make_uv_mat, create_building_mesh,
+                                         get_roof_texture_path, get_wall_texture_path,
+                                         apply_materials_and_uvs)
+
+
+EXPORT_FORMATS = ['dae', 'usdz']
 
 @click.group()
 def cli():
@@ -29,9 +34,12 @@ def get_parcel_xy(parcel_coords, centroid_lon, centroid_lat):
     return parcel_xy
 
 
-def create_dae_for_xy_building(parcel_xy, height_meters, building_name, export_dir,
-                                   ground_z=0,
-                                   apply_materials=False):
+def create_file_for_xy_building(parcel_xy, height_meters, building_name, export_dir,
+                                ground_z=0,
+                                apply_materials=False,
+                                export_format='dae'):
+    assert export_format.lower() in EXPORT_FORMATS, "Unsupported export format: %s" % export_format
+
     obj = create_building_mesh(
         parcel_xy=parcel_xy,
         height_meters=height_meters,
@@ -40,7 +48,9 @@ def create_dae_for_xy_building(parcel_xy, height_meters, building_name, export_d
     )
 
     if apply_materials:
-        apply_materials_and_uvs(obj)
+        wall_material = get_wall_texture_path(height= height_meters * 3.28)  # Convert meters to feet
+        roof_material = get_roof_texture_path()
+        apply_materials_and_uvs(obj, wall_texture_path=wall_material, roof_texture_path=roof_material)
 
     bpy.context.collection.objects.link(obj)
 
@@ -60,42 +70,47 @@ def create_dae_for_xy_building(parcel_xy, height_meters, building_name, export_d
                                    scale=False)
 
     os.makedirs(export_dir, exist_ok=True)
-    export_path = os.path.join(export_dir, f"{building_name}.dae")
 
-    # bpy.ops.export_scene.collada(
-    #     filepath=export_path,
-    #     use_selection=True,  # only exports your building
-    #     apply_modifiers=True,  # bake any modifiers
-    #     axis_forward='Y',  # Blender X→E, Y→N → ARKit expects Y forward
-    #     axis_up='Z'  # Z up in both Blender and ARKit
-    # )
-    # bpy.ops.wm.collada_export(
-    #     filepath=export_path,
-    #     selected=True,  # only export the active/selected object
-    #     apply_modifiers=True,  # bake in any modifiers
-    #     export_global_forward_selection='Y',  # use Blender’s Y axis as “forward”
-    #     export_global_up_selection='Z',  # use Blender’s Z axis as “up”
-    #     apply_global_orientation=True,  # actually apply that axis rotation
-    #     triangulate=True,  # optional, Collada likes triangles
-    #     use_texture_copies=True  # include your textures if any
-    # )
-    export_path = os.path.join(export_dir, f"{building_name}.usdz")
-    bpy.ops.wm.usd_export(
-        filepath=export_path,
-        filter_usd=True,  # enable USD export
-        selected_objects_only=True,  # only export your building
-        visible_objects_only=True,  # skip hidden objects
-        use_instancing=True,  # share duplicated geometry
-        export_meshes=True,  # include meshes
-        export_materials=True,  # include materials
-        export_normals=True,  # include normals
-        triangulate_meshes=True,  # optional: USD likes triangles
-        convert_scene_units='METERS',  # bake units as meters
-        meters_per_unit=1,  # 1 BU = 1 meter
-        convert_orientation=True,  # apply axis remap
-        export_global_forward_selection='Y',  # Blender +Y → file +Z (north)
-        export_global_up_selection='Z'  # Blender +Z → file +Y (up)
-    )
+    if export_format.lower() == 'dae':
+        export_path = os.path.join(export_dir, f"{building_name}.dae")
+        # bpy.ops.export_scene.collada(
+        #     filepath=export_path,
+        #     use_selection=True,  # only exports your building
+        #     apply_modifiers=True,  # bake any modifiers
+        #     axis_forward='Y',  # Blender X→E, Y→N → ARKit expects Y forward
+        #     axis_up='Z'  # Z up in both Blender and ARKit
+        # )
+        bpy.ops.wm.collada_export(
+            filepath=export_path,
+            selected=True,  # only export the active/selected object
+            apply_modifiers=True,  # bake in any modifiers
+            export_global_forward_selection='Y',  # use Blender’s Y axis as “forward”
+            export_global_up_selection='Z',  # use Blender’s Z axis as “up”
+            apply_global_orientation=True,  # actually apply that axis rotation
+            triangulate=True,  # optional, Collada likes triangles
+            use_texture_copies=True  # include your textures if any
+        )
+
+    elif export_format.lower() == 'usdz':
+        export_path = os.path.join(export_dir, f"{building_name}.usdz")
+        bpy.ops.wm.usd_export(
+            filepath=export_path,
+            filter_usd=True,  # enable USD export
+            selected_objects_only=True,  # only export your building
+            visible_objects_only=True,  # skip hidden objects
+            use_instancing=True,  # share duplicated geometry
+            export_meshes=True,  # include meshes
+            export_materials=True,  # include materials
+            export_normals=True,  # include normals
+            triangulate_meshes=True,  # optional: USD likes triangles
+            convert_scene_units='METERS',  # bake units as meters
+            meters_per_unit=1,  # 1 BU = 1 meter
+            convert_orientation=True,  # apply axis remap
+            export_global_forward_selection='Y',  # Blender +Y → file +Z (north)
+            export_global_up_selection='Z'  # Blender +Z → file +Y (up)
+        )
+    else:
+        raise ValueError(f"Unsupported export format: {export_format}")
 
 
 def clear_scene():
@@ -182,7 +197,13 @@ def dae_to_usd(input_dir, export_dir, export_format):
 @click.option('--export_dir', type=click.Path(), default=os.path.expanduser("~/Desktop/arkit_buildings"), help='Directory to export DAE files')
 @click.option('--raise_err', is_flag=True, help='Raise error on failure to generate a building')
 @click.option('--apply_materials', is_flag=True, help='Apply materials to the generated buildings')
-def build_dae_from_csv( csv_path, geometry_file, building_prefix, export_dir, raise_err, apply_materials):
+@click.option('--export_format', default='dae', type=click.Choice(EXPORT_FORMATS, case_sensitive=False), help='Export format for the buildings')
+def buildings_from_csv( csv_path, geometry_file, building_prefix, export_dir, raise_err, apply_materials, export_format):
+    """
+    For each row in the CSV, generate a building file.
+    All files will be written to the export_dir, with names like {building_prefix}_{mapblklot}_{index}.{export_format}
+    Local coordinate systems are used for each building; centroids are stored in an exported JSON file.
+    """
 
     with open(geometry_file, "r") as f:
         geom_data = json.load(f)
@@ -190,6 +211,24 @@ def build_dae_from_csv( csv_path, geometry_file, building_prefix, export_dir, ra
     with open(csv_path, newline="") as f:
         parcel_specs = list(csv.DictReader(f))
 
+    building_centroids = buildings_from_list(
+        parcel_specs=parcel_specs,
+        geom_data=geom_data,
+        building_prefix=building_prefix,
+        export_dir=export_dir,
+        raise_err=raise_err,
+        apply_materials=apply_materials,
+        export_format=export_format
+    )
+
+    with open(os.path.join(export_dir, f'{building_prefix}_centroids.json'), 'w') as f:
+        json.dump(building_centroids, f, indent=4)
+
+    print("Done generating buildings")
+
+
+def buildings_from_list(parcel_specs, geom_data, building_prefix='building', export_dir=None,
+                            raise_err=False, apply_materials=False, export_format='dae'):
     successful_buildings, total_parcels = 0, len(parcel_specs)
     building_centroids = {}
 
@@ -207,12 +246,13 @@ def build_dae_from_csv( csv_path, geometry_file, building_prefix, export_dir, ra
                 building_centroids[building_name] = (centroid_lon, centroid_lat)
                 parcel_xy = get_parcel_xy(polygon, centroid_lon, centroid_lat)
 
-                create_dae_for_xy_building(
+                create_file_for_xy_building(
                     parcel_xy=parcel_xy,
                     height_meters=height * 0.3048,  # Convert feet to meters
                     building_name=building_name,
                     export_dir=export_dir,
-                    apply_materials=apply_materials
+                    apply_materials=apply_materials,
+                    export_format=export_format
                 )
         except Exception as e:
             print(f"Error generating building for {lot} geom {j}: {e}", file=sys.stderr)
@@ -221,10 +261,30 @@ def build_dae_from_csv( csv_path, geometry_file, building_prefix, export_dir, ra
             else:
                 continue
 
-    with open(os.path.join(export_dir, f'{building_prefix}_centroids.json'), 'w') as f:
-        json.dump(building_centroids, f, indent=4)
+    return building_centroids
 
-    print("Done generating buildings")
+
+def kmz_from_list(parcel_specs, geom_data, building_prefix='building', export_dir=None,
+                     raise_err=False, apply_materials=False):
+    """
+    Generate KMZ files from a list of parcel specifications.
+    -
+
+    """
+    export_format = 'dae'
+
+    building_centroids = buildings_from_list(
+        parcel_specs=parcel_specs,
+        geom_data=geom_data,
+        building_prefix=building_prefix,
+        export_dir=export_dir,
+        raise_err=raise_err,
+        apply_materials=apply_materials,
+        export_format=export_format
+    )
+
+
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

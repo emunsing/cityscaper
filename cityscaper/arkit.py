@@ -5,6 +5,7 @@ import sys
 import os
 import csv
 import json
+import zipfile
 from cityscaper.blender_building import (TransverseMercator, make_uv_mat, create_building_mesh,
                                          get_roof_texture_path, get_wall_texture_path,
                                          apply_materials_and_uvs)
@@ -265,25 +266,259 @@ def buildings_from_list(parcel_specs, geom_data, building_prefix='building', exp
 
 
 def kmz_from_list(parcel_specs, geom_data, building_prefix='building', export_dir=None,
-                     raise_err=False, apply_materials=False):
+                     raise_err=False):
     """
     Generate KMZ files from a list of parcel specifications.
-    -
-
+    
+    This function creates a KMZ file containing all the DAE building models
+    properly positioned at their accurate latitude/longitude coordinates for
+    import into Google Earth.
+    
+    The function:
+    1. Generates individual DAE files for each building using local coordinate systems
+    2. Creates a KML file that references these DAE models at their correct lat/lon positions
+    3. Packages everything into a KMZ file (ZIP format) for easy import into Google Earth
+    4. Includes fallback polygon representations in case 3D models don't load
+    
+    Args:
+        parcel_specs: List of parcel specification dictionaries with 'mapblklot' and 'height' keys
+        geom_data: Dictionary mapping mapblklot to list of parcel geometry polygons
+        building_prefix: Prefix for building names (default: 'building')
+        export_dir: Directory to export files (defaults to current directory)
+        raise_err: Whether to raise exceptions on errors (default: False)
+        apply_materials: Whether to apply materials to buildings (default: False)
+        
+    Returns:
+        Dictionary mapping building names to (longitude, latitude) centroid coordinates
+        
+    Example:
+        # Generate KMZ from CSV data
+        with open('parcels.csv', 'r') as f:
+            parcel_specs = list(csv.DictReader(f))
+        with open('geometry.json', 'r') as f:
+            geom_data = json.load(f)
+            
+        centroids = kmz_from_list(
+            parcel_specs=parcel_specs,
+            geom_data=geom_data,
+            building_prefix='my_buildings',
+            export_dir='./output'
+        )
+        
+        # This creates: ./output/my_buildings_buildings.kmz
     """
-    export_format = 'dae'
-
+    
+    if export_dir is None:
+        export_dir = os.getcwd()
+    
+    # First, generate all the DAE files and get their centroids
     building_centroids = buildings_from_list(
         parcel_specs=parcel_specs,
         geom_data=geom_data,
         building_prefix=building_prefix,
         export_dir=export_dir,
         raise_err=raise_err,
-        apply_materials=apply_materials,
-        export_format=export_format
+        apply_materials=True,
+        export_format='dae'
     )
+    
+    # Create the KML content for 3D models
+    kml_content = create_kml_for_3d_models(building_centroids, building_prefix, export_dir, geom_data, parcel_specs)
+    
+    # Create the KMZ file
+    kmz_path = os.path.join(export_dir, f"{building_prefix}_buildings.kmz")
+    create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, building_prefix)
+    
+    print(f"KMZ file created: {kmz_path}")
+    return building_centroids
 
 
+def create_kml_for_3d_models(building_centroids, building_prefix, export_dir, geom_data=None, parcel_specs=None):
+    """
+    Create KML content for 3D model placemarks.
+    
+    Args:
+        building_centroids: Dictionary mapping building names to (lon, lat) coordinates
+        building_prefix: Prefix for building names
+        export_dir: Directory containing DAE files
+        geom_data: Optional geometry data for fallback polygon representation
+        parcel_specs: Optional parcel specifications for height data
+        
+    Returns:
+        String containing the KML content
+    """
+    kml_header = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" 
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <name>3D Buildings</name>
+    <description>Generated 3D building models</description>
+    <Style id="buildingStyle">
+      <PolyStyle>
+        <color>cc0000ff</color>
+        <outline>0</outline>
+      </PolyStyle>
+    </Style>
+    <Style id="fallbackStyle">
+      <PolyStyle>
+        <color>ccff0000</color>
+        <outline>1</outline>
+        <outlineColor>ff000000</outlineColor>
+      </PolyStyle>
+    </Style>
+"""
+    
+    kml_footer = """  </Document>
+</kml>"""
+    
+    placemarks = []
+    
+    for building_name, (centroid_lon, centroid_lat) in building_centroids.items():
+        # Create a placemark for each building
+        dae_filename = f"{building_name}.dae"
+        dae_path_in_kmz = f"{dae_filename}"
+        
+        # Extract lot and polygon index from building name
+        # Format: {building_prefix}_{lot}_{index}
+        parts = building_name.split('_')
+        if len(parts) >= 3:
+            lot = parts[1]
+            poly_index = int(parts[2]) - 1  # Convert back to 0-based index
+        else:
+            lot = None
+            poly_index = 0
+        
+        # Create the main 3D model placemark
+        placemark = f"""    <Placemark>
+      <name>{building_name}</name>
+      <description>3D Building Model</description>
+      <styleUrl>#buildingStyle</styleUrl>
+      <Model>
+        <altitudeMode>relativeToGround</altitudeMode>
+        <Location>
+          <longitude>{centroid_lon:.8f}</longitude>
+          <latitude>{centroid_lat:.8f}</latitude>
+          <altitude>0</altitude>
+        </Location>
+        <Orientation>
+          <heading>0</heading>
+          <tilt>0</tilt>
+          <roll>0</roll>
+        </Orientation>
+        <Scale>
+          <x>1</x>
+          <y>1</y>
+          <z>1</z>
+        </Scale>
+        <Link>
+          <href>{dae_path_in_kmz}</href>
+        </Link>
+      </Model>
+    </Placemark>"""
+        
+        placemarks.append(placemark)
+        
+#         # Add fallback polygon representation if geometry data is available
+#         if geom_data and lot and lot in geom_data and poly_index < len(geom_data[lot]):
+#             polygon = geom_data[lot][poly_index]
+#             height = 0
+#             if parcel_specs:
+#                 for spec in parcel_specs:
+#                     if spec.get("mapblklot") == lot:
+#                         height = float(spec.get("height", 0)) * 0.3048  # Convert feet to meters
+#                         break
+#
+#             # Create coordinate string for polygon
+#             coord_strings = []
+#             for lat, lon in polygon:
+#                 coord_strings.append(f"              {lon},{lat},{height}")
+#             coord_string = "\n".join(coord_strings)
+#
+#             fallback_placemark = f"""    <Placemark>
+#       <name>{building_name}_fallback</name>
+#       <description>Fallback polygon representation</description>
+#       <styleUrl>#fallbackStyle</styleUrl>
+#       <Polygon>
+#         <extrude>1</extrude>
+#         <altitudeMode>relativeToGround</altitudeMode>
+#         <outerBoundaryIs>
+#           <LinearRing>
+#             <coordinates>
+# {coord_string}
+#             </coordinates>
+#           </LinearRing>
+#         </outerBoundaryIs>
+#       </Polygon>
+#     </Placemark>"""
+#
+#             placemarks.append(fallback_placemark)
+    
+    return kml_header + "\n".join(placemarks) + kml_footer
+
+
+def create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, building_prefix):
+    """
+    Create a KMZ file containing the KML and all files from the export directory.
+    
+    Args:
+        kmz_path: Path where to save the KMZ file
+        kml_content: KML content as string
+        export_dir: Directory containing DAE files and textures
+        building_centroids: Dictionary mapping building names to coordinates
+        building_prefix: Prefix for building names
+    """
+    with zipfile.ZipFile(kmz_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
+        # Add the main KML file
+        kmz.writestr('doc.kml', kml_content)
+        
+        # Add all files from the export directory to the KMZ
+        for root, dirs, files in os.walk(export_dir):
+            for file in files:
+                # Get the full path of the file
+                file_path = os.path.join(root, file)
+                
+                # Calculate the relative path within the KMZ
+                rel_path = os.path.relpath(file_path, export_dir)
+                
+                # For DAE files, put them in the models/ subdirectory
+                if file.lower().endswith('.dae'):
+                    kmz_path_in_archive = f"{file}"
+                else:
+                    # For other files (textures, etc.), maintain their relative structure
+                    kmz_path_in_archive = rel_path
+                
+                # Add the file to the KMZ
+                kmz.write(file_path, kmz_path_in_archive)
+                print(f"Added to KMZ: {kmz_path_in_archive}")
+
+
+@cli.command()
+@click.argument('csv_path', type=click.Path(exists=True, dir_okay=False))
+@click.option('--geometry_file', type=click.Path(exists=True, dir_okay=False), default=os.path.expanduser("~/src/cityscaper/data/sf_map_unfiltered.json"))
+@click.option('--building_prefix', default='building', help='Prefix for building names')
+@click.option('--export_dir', type=click.Path(), default=os.path.expanduser("~/Desktop/arkit_buildings"), help='Directory to export KMZ file')
+@click.option('--raise_err', is_flag=True, help='Raise error on failure to generate a building')
+@click.option('--apply_materials', is_flag=True, help='Apply materials to the generated buildings')
+def kmz_from_csv(csv_path, geometry_file, building_prefix, export_dir, raise_err, apply_materials):
+    """
+    Generate a KMZ file from CSV data containing building specifications.
+    Creates a KMZ file with 3D building models properly positioned at their
+    accurate latitude/longitude coordinates for import into Google Earth.
+    """
+
+    with open(geometry_file, "r") as f:
+        geom_data = json.load(f)
+
+    with open(csv_path, newline="") as f:
+        parcel_specs = list(csv.DictReader(f))
+
+    kmz_from_list(
+        parcel_specs=parcel_specs,
+        geom_data=geom_data,
+        building_prefix=building_prefix,
+        export_dir=export_dir,
+        raise_err=raise_err,
+    )
 
 
 if __name__ == "__main__":

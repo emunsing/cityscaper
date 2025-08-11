@@ -367,10 +367,10 @@ def apply_materials_and_uvs(obj: bpy.types.Object,
     depth_m = max(ys) - min(ys)
     height_m = max(zs) - min(zs)
 
-    wall_u = width_m / 24.85
-    wall_v = height_m / 24.38
-    roof_u = width_m / 3
-    roof_v = depth_m / 3
+    wall_u = width_m / 12.425
+    wall_v = height_m / 12.425
+    roof_u = width_m / 12
+    roof_v = depth_m / 12
 
     # Create UV layer if needed
     if not obj.data.uv_layers:

@@ -96,6 +96,7 @@ def site_data(geom_select,
 @click.option('--pdev_multiplier', default=1.0, type=float, help='Multiplier to correct BlueSky model to actual city probability/yield')
 @click.option('--rezoning_scenario', default='baseline', type=click.Choice(REZONING_CODES.keys()), help='Rezoning scenario to use')
 @click.option('--override_csv', default=None, type=click.Path(exists=True, dir_okay=False), help='CSV file with overrides for specific lots')
+@click.option('--exclude_csv', default=None, type=click.Path(exists=True, dir_okay=False), help='CSV file with lots to exclude in "mapblklot" column')
 @click.option('--output_fname', default='rezoning_output.csv', type=click.Path(dir_okay=False), help='Output filename for the development simulation results')
 def model(geom_select,
           simulation_years,
@@ -104,6 +105,7 @@ def model(geom_select,
           pdev_multiplier,
           rezoning_scenario,
           override_csv,
+          exclude_csv,
           output_fname):
      """
      Create a CSV of sites which are developed, and the years when they are developed, based on a parcel-by-year simulation.
@@ -121,7 +123,9 @@ def model(geom_select,
                                       pdev_metric=pdev_metric,
                                       pdev_correction_factor=pdev_multiplier,
                                       rezoning_scenario=rezoning_scenario,
-                                      override_csv=override_csv)
+                                      override_csv=override_csv,
+                                      exclude_csv=exclude_csv,)
+
 
      resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
      developed_site_data[EXPORT_FIELDS + ['development_study_year']].sort_values(by='development_study_year').to_csv(resolved_fname, index=True, index_label='mapblklot')

@@ -467,29 +467,50 @@ def create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, build
         building_centroids: Dictionary mapping building names to coordinates
         building_prefix: Prefix for building names
     """
+    # First, collect all files we want to include (excluding the KMZ file itself)
+    files_to_include = []
+    
+    # Use glob to get a snapshot of files without recursive walking
+    import glob
+    
+    # Get all files in the export directory (non-recursive)
+    for file_path in glob.glob(os.path.join(export_dir, "*")):
+        if os.path.isfile(file_path):
+            # Skip the KMZ file we're about to create
+            if os.path.basename(file_path) == os.path.basename(kmz_path):
+                continue
+            files_to_include.append(file_path)
+    
+    # Also get files in any subdirectories (like texture subdirs)
+    for file_path in glob.glob(os.path.join(export_dir, "**", "*"), recursive=True):
+        if os.path.isfile(file_path):
+            # Skip the KMZ file we're about to create
+            if os.path.basename(file_path) == os.path.basename(kmz_path):
+                continue
+            if file_path not in files_to_include:  # Avoid duplicates
+                files_to_include.append(file_path)
+    
+    print(f"Found {len(files_to_include)} files to include in KMZ")
+    
     with zipfile.ZipFile(kmz_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
         # Add the main KML file
         kmz.writestr('doc.kml', kml_content)
         
-        # Add all files from the export directory to the KMZ
-        for root, dirs, files in os.walk(export_dir):
-            for file in files:
-                # Get the full path of the file
-                file_path = os.path.join(root, file)
-                
-                # Calculate the relative path within the KMZ
-                rel_path = os.path.relpath(file_path, export_dir)
-                
-                # For DAE files, put them in the models/ subdirectory
-                if file.lower().endswith('.dae'):
-                    kmz_path_in_archive = f"{file}"
-                else:
-                    # For other files (textures, etc.), maintain their relative structure
-                    kmz_path_in_archive = rel_path
-                
-                # Add the file to the KMZ
-                kmz.write(file_path, kmz_path_in_archive)
-                print(f"Added to KMZ: {kmz_path_in_archive}")
+        # Add all collected files to the KMZ
+        for file_path in files_to_include:
+            # Calculate the relative path within the KMZ
+            rel_path = os.path.relpath(file_path, export_dir)
+            
+            # For DAE files, put them in the models/ subdirectory
+            if file_path.lower().endswith('.dae'):
+                kmz_path_in_archive = f"{os.path.basename(file_path)}"
+            else:
+                # For other files (textures, etc.), maintain their relative structure
+                kmz_path_in_archive = rel_path
+            
+            # Add the file to the KMZ
+            kmz.write(file_path, kmz_path_in_archive)
+            print(f"Added to KMZ: {kmz_path_in_archive}")
 
 
 @cli.command()

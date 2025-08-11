@@ -20,7 +20,7 @@ def get_site_data(geom_select: tuple[float, float, float, float] = (-122.43270, 
 
     if random_seed:
         np.random.seed(random_seed)
-    height_estimator_func = lambda df: (df['height'] * (np.random.rand(df.shape[0]) * 0.5 + 0.5)) // 5 * 5
+    height_estimator_func = lambda df: (df['height'] * (np.random.rand(df.shape[0]) * 0.3 + 0.7)) // 5 * 5
 
     assert rezoning_scenario in REZONING_CODES.keys(), f"Rezoning scenario must be one of {REZONING_CODES.keys()}"
     rezoning_fname = f"rezoning_{REZONING_CODES[rezoning_scenario]}_output.RDS"
@@ -96,6 +96,7 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
                pdev_correction_factor: float = 1.0,
                rezoning_scenario: str = 'apr_2025',
                override_csv: os.PathLike | None = None,
+               exclude_csv: os.PathLike | None = None,
                unfilterered_rezoning_data_rds: os.PathLike = UNFILTERED_REZONING_DATA,
                geom_data_rds: os.PathLike = GEOM_DATA_UNFILTERED,
                ) -> pd.DataFrame:
@@ -108,6 +109,13 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
         unfilterered_rezoning_data_rds=unfilterered_rezoning_data_rds,
         geom_data_rds=geom_data_rds
     )
+
+    if exclude_csv:
+        exclude_lots = pd.read_csv(exclude_csv, dtype={'mapblklot': str}, index_col='mapblklot')
+        exclude_lots = exclude_lots.index.intersection(development_candidates.index)
+        if exclude_lots.empty:
+            logger.warning(f"Exclude_lots csv was specified, but no eligible lots in the study area! Double-check study zone and file format?")
+        development_candidates = development_candidates.drop(index=exclude_lots, errors='ignore')
 
     developed_site_data = lotwise_pdev_sim(
         development_candidates=development_candidates,

@@ -81,12 +81,13 @@ def lotwise_pdev_sim(development_candidates: pd.DataFrame,
             developed_site_years[mapblklot] = 0  # Override lots are considered developed in year 0
             continue
         for yr in range(1, simulation_years+1):
-            if np.random.rand() <= pdev / pdev_correction_factor:
+            if np.random.rand() <= pdev * pdev_correction_factor:
                 developed_site_years[mapblklot] = yr
                 break
     developed_site_years = pd.Series(developed_site_years, name='development_study_year')
 
     developed_site_data = development_candidates.join(developed_site_years, how='right')
+    developed_site_data.index.name = development_candidates.index.name
     return developed_site_data
 
 def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.76874, -122.43060, 37.77047),

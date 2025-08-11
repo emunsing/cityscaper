@@ -2,9 +2,10 @@ import os
 import csv
 import json
 import pandas as pd
+import geopandas as gpd
 from shapely.geometry import MultiPolygon, Polygon
 
-def kml_from_latlon(parcel_geom: dict[str, list[list[float]]],
+def kml_from_latlon(parcel_geom: dict[str, list[list[list[float]]]],
                     parcel_heights: dict[str, float] | None = None
                     )-> str:
     """
@@ -63,7 +64,7 @@ def kml_from_latlon(parcel_geom: dict[str, list[list[float]]],
     return kml
 
 def kml_from_parcel_table(parcel_table: list[dict[str, float | str]],
-                             geom_data: dict[str, list[list[float]]]) -> str:
+                             geom_data: dict[str, list[list[list[float]]]]) -> str:
     """
     Extract latitude and longitude coordinates from a parcel table, and a dictionary of simple geometry data
     :param parcel_table: Desired output parcel information, as dictionaries with keys 'mapblklot' and 'developed_height', i.e. created like csv.dictreader
@@ -88,9 +89,9 @@ def kml_from_parcel_table(parcel_table: list[dict[str, float | str]],
                            parcel_heights=selected_parcel_heights_meters)
 
 
-def kml_from_shapely_polygons(parcel_specs: dict[str, Polygon | MultiPolygon])-> str:
+def gser_to_json_dict(gser: gpd.GeoSeries) -> dict[str, list[list[list[float]]]]:
     parcel_latlons = {}
-    for lot, mp in parcel_specs.items():
+    for lot, mp in gser.items():
         if isinstance(mp, MultiPolygon):
             if len(mp.geoms) > 1:
                 print(f"Multi-polygon parcels are not supported: {lot}")
@@ -101,6 +102,10 @@ def kml_from_shapely_polygons(parcel_specs: dict[str, Polygon | MultiPolygon])->
         vertex_pairs = []
         for lat, lng in polygon.exterior.coords:
             vertex_pairs.append([lat, lng])
-        parcel_latlons[lot] = [vertex_pairs]
+        parcel_latlons[str(lot)] = [vertex_pairs]
+    return parcel_latlons
 
+
+def kml_from_shapely_polygons(parcel_spec_gser: gpd.GeoSeries)-> str:
+    parcel_latlons = gser_to_json_dict(parcel_spec_gser)
     return kml_from_latlon(parcel_geom=parcel_latlons)

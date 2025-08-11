@@ -5,9 +5,9 @@ import os
 import csv
 import json
 from cityscaper.constants import DATA_DIR, OUTPUT_DIR, EXPORT_FIELDS, REZONING_CODES
-from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bounds, resolve_path
+from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bound_latlon, resolve_path
 from cityscaper.modeling import pdev_model, get_site_data
-from cityscaper.geom import kml_from_latlon
+from cityscaper.geom import kml_from_parcel_table
 import click
 import logging
 
@@ -26,7 +26,7 @@ def parse_geojson_rds(input_fname: os.PathLike, output_fname: os.PathLike):
     input_fname = resolve_path(input_fname, default_parent=DATA_DIR)
     output_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
     geom_json = geojson_rds_to_json(input_fname)
-    clean_geom = geojson_to_parcel_bounds(geom_json)
+    clean_geom = geojson_to_parcel_bound_latlon(geom_json)
     os.makedirs(output_fname.parent, exist_ok=True)
     with open(output_fname, 'w') as outfile:
         json.dump(clean_geom, outfile)
@@ -47,8 +47,8 @@ def build_kml(
     with open(csv_path, newline="") as f:
         parcel_specs = list(csv.DictReader(f))
 
-    kml = kml_from_latlon(parcel_specs=parcel_specs,
-                          geom_data=geom_data,)
+    kml = kml_from_parcel_table(parcel_specs=parcel_specs,
+                                geom_data=geom_data,)
 
     resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
     with open(resolved_fname, 'w') as kml_file:

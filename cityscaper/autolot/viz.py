@@ -1,6 +1,7 @@
 from shapely import plotting as shap_plot   
 from cityscaper.autolot.utils import get_nearest_parcels
 from cityscaper.autolot.parcel_analysis import get_sides_df
+import matplotlib.pyplot as plt
 
 
 def plot_edges(parcel_ser, blockid, ax=None, street_buffer=None, use_shortest_line=False, show_envelope=False):

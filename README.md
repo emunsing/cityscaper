@@ -6,6 +6,11 @@ Python data processing:
 - main.py: 
   - Parse sf_map.RDS file to parcel lat/lon dict, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047` 
   - Run pdev simulation for a geometry, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047`
+  - Create kml of the raw geometry, like `$ python main.py build-kml ~/Desktop/rezoning_frontier.csv ~/frontier_redevelopment.kml`
+
+Creating USDZ files for Apple ARKit:
+  - Create simple DAE files and convert them to USDZ files for use with Apple ARKit: `$ python arkit.py build-dae-from-csv ~/Desktop/rezoning_frontier.csv  --raise_err  --apply_materials`
+  - Convert DAE files to USDZ files: `$ python arkit.py dae-to-usd --input-dir ~/Desktop//buildings2 --export-dir ~/Desktop/buildings2_out --export-format "building_{fname}_1.usdz"`
 
 Blender scripting:
 - blender_building.py:  Runs from within Blender in the scripting pane:
@@ -14,6 +19,7 @@ Blender scripting:
 - blender_cli.py: NOT TESTED
    - Intended for combined blender+python command line scripting, like `$ blender --background --python blender_cli.py -- --input_geom <path/to/geometry.json> --input_parcels <path/to/developed_parcel_height.csv>`
 
+Blender animation:
 
 ## Blender Python Scripting
 

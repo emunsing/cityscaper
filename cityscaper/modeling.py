@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-from cityscaper.utils import  latlon_filter, read_rds_to_df, geojson_rds_to_json, geojson_to_parcel_bounds
+from cityscaper.utils import  latlon_filter, read_rds_to_df, geojson_rds_to_json, geojson_to_parcel_bound_latlon
 from cityscaper.constants import DATA_DIR, REZONING_CODES
 import logging
 
@@ -47,7 +47,7 @@ def get_site_data(geom_select: tuple[float, float, float, float] = (-122.43270, 
                 f"Override lots {', '.join(lots_needing_data)} are not in rezoning scenario data, loading unfiltered data- are they in the Pipeline?")
             unfiltered_rezoning_data = read_rds_to_df(unfilterered_rezoning_data_rds, index_cols='mapblklot')
             auxiliary_lots = lots_needing_data.intersection(unfiltered_rezoning_data.index)
-            raw_geom_geojson = geojson_to_parcel_bounds(geojson_rds_to_json(geom_data_rds))
+            raw_geom_geojson = geojson_to_parcel_bound_latlon(geojson_rds_to_json(geom_data_rds))
             auxiliary_lots = [mapblklot for mapblklot in auxiliary_lots if mapblklot in raw_geom_geojson]
             auxiliary_data = unfiltered_rezoning_data.loc[auxiliary_lots, :].copy()
             rezoning_scenario_data = pd.concat([rezoning_scenario_data, auxiliary_data], axis=0)

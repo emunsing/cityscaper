@@ -45,5 +45,5 @@ def geojson_rds_to_json(fname):
     return geom_json
 
 
-def geojson_to_parcel_bounds(geojson:dict) -> dict:
+def geojson_to_parcel_bound_latlon(geojson:dict) -> dict:
     return {f['properties']['mapblklot']: f['geometry']['coordinates'] for f in geojson['features']}

@@ -6,6 +6,11 @@ Python data processing:
 - main.py: 
   - Parse sf_map.RDS file to parcel lat/lon dict, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047` 
   - Run pdev simulation for a geometry, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047`
+  - Create kml of the raw geometry, like `$ python main.py build-kml ~/Desktop/rezoning_frontier.csv ~/frontier_redevelopment.kml`
+
+Creating USDZ files for Apple ARKit:
+  - Create simple DAE files and convert them to USDZ files for use with Apple ARKit: `$ python arkit.py build-dae-from-csv ~/Desktop/rezoning_frontier.csv  --raise_err  --apply_materials`
+  - Convert DAE files to USDZ files: `$ python arkit.py dae-to-usd --input-dir ~/Desktop//buildings2 --export-dir ~/Desktop/buildings2_out --export-format "building_{fname}_1.usdz"`
 
 Blender scripting:
 - blender_building.py:  Runs from within Blender in the scripting pane:
@@ -14,6 +19,7 @@ Blender scripting:
 - blender_cli.py: NOT TESTED
    - Intended for combined blender+python command line scripting, like `$ blender --background --python blender_cli.py -- --input_geom <path/to/geometry.json> --input_parcels <path/to/developed_parcel_height.csv>`
 
+Blender animation:
 
 ## Blender Python Scripting
 
@@ -145,6 +151,10 @@ Google Maps squares from Blosm selector
   - assessor blocks: `["3539", "3538", "3538", "3537", "3537", "3536", "3536", "0874", "0875", "0866", "0865", "0864", "0863", "0867", "0867", "0868", "0868", "0869", "1260", "1260", "3540", "3540", "3541", "3541", "3561", "3560", "3561", "3562", "3542", "2611", "2612", "2613", "2614", "2622", "2623", "2648", "2647", "3582", "3563", "3564", "3559", "3558", "3543", "3544", "3535", "3534", "3534", "3501", "0872", "0873" ]`
 - Geary between 2nd and 5th (actually California to Balboa, Arguello to 9th):
   - Gmaps selector: `-122.46824,37.77676,-122.45776,37.78519`
+- Eureka Valley:
+  - Gmaps selector: `-122.44248,37.75446,-122.42174,37.77131`
+  - Centered at 
 - Frontier Tower
   - Gmaps selector: `-122.42006,37.77483,-122.41333,37.77926`
+  - Centered at -122.416695,37.777045
 # Questions for Salim

@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-from cityscaper.utils import  latlon_filter, read_rds_to_df, geojson_rds_to_json, geojson_to_parcel_bounds
+from cityscaper.utils import  latlon_filter, read_rds_to_df, geojson_rds_to_json, geojson_to_parcel_bound_latlon
 from cityscaper.constants import DATA_DIR, REZONING_CODES
 import logging
 
@@ -20,7 +20,7 @@ def get_site_data(geom_select: tuple[float, float, float, float] = (-122.43270, 
 
     if random_seed:
         np.random.seed(random_seed)
-    height_estimator_func = lambda df: (df['height'] * (np.random.rand(df.shape[0]) * 0.5 + 0.5)) // 5 * 5
+    height_estimator_func = lambda df: (df['height'] * (np.random.rand(df.shape[0]) * 0.3 + 0.7)) // 5 * 5
 
     assert rezoning_scenario in REZONING_CODES.keys(), f"Rezoning scenario must be one of {REZONING_CODES.keys()}"
     rezoning_fname = f"rezoning_{REZONING_CODES[rezoning_scenario]}_output.RDS"
@@ -47,7 +47,7 @@ def get_site_data(geom_select: tuple[float, float, float, float] = (-122.43270, 
                 f"Override lots {', '.join(lots_needing_data)} are not in rezoning scenario data, loading unfiltered data- are they in the Pipeline?")
             unfiltered_rezoning_data = read_rds_to_df(unfilterered_rezoning_data_rds, index_cols='mapblklot')
             auxiliary_lots = lots_needing_data.intersection(unfiltered_rezoning_data.index)
-            raw_geom_geojson = geojson_to_parcel_bounds(geojson_rds_to_json(geom_data_rds))
+            raw_geom_geojson = geojson_to_parcel_bound_latlon(geojson_rds_to_json(geom_data_rds))
             auxiliary_lots = [mapblklot for mapblklot in auxiliary_lots if mapblklot in raw_geom_geojson]
             auxiliary_data = unfiltered_rezoning_data.loc[auxiliary_lots, :].copy()
             rezoning_scenario_data = pd.concat([rezoning_scenario_data, auxiliary_data], axis=0)
@@ -81,12 +81,13 @@ def lotwise_pdev_sim(development_candidates: pd.DataFrame,
             developed_site_years[mapblklot] = 0  # Override lots are considered developed in year 0
             continue
         for yr in range(1, simulation_years+1):
-            if np.random.rand() <= pdev / pdev_correction_factor:
+            if np.random.rand() <= pdev * pdev_correction_factor:
                 developed_site_years[mapblklot] = yr
                 break
     developed_site_years = pd.Series(developed_site_years, name='development_study_year')
 
     developed_site_data = development_candidates.join(developed_site_years, how='right')
+    developed_site_data.index.name = development_candidates.index.name
     return developed_site_data
 
 def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.76874, -122.43060, 37.77047),
@@ -96,6 +97,7 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
                pdev_correction_factor: float = 1.0,
                rezoning_scenario: str = 'apr_2025',
                override_csv: os.PathLike | None = None,
+               exclude_csv: os.PathLike | None = None,
                unfilterered_rezoning_data_rds: os.PathLike = UNFILTERED_REZONING_DATA,
                geom_data_rds: os.PathLike = GEOM_DATA_UNFILTERED,
                ) -> pd.DataFrame:
@@ -108,6 +110,13 @@ def pdev_model(geom_select: tuple[float, float, float, float] = (-122.43270, 37.
         unfilterered_rezoning_data_rds=unfilterered_rezoning_data_rds,
         geom_data_rds=geom_data_rds
     )
+
+    if exclude_csv:
+        exclude_lots = pd.read_csv(exclude_csv, dtype={'mapblklot': str}, index_col='mapblklot')
+        exclude_lots = exclude_lots.index.intersection(development_candidates.index)
+        if exclude_lots.empty:
+            logger.warning(f"Exclude_lots csv was specified, but no eligible lots in the study area! Double-check study zone and file format?")
+        development_candidates = development_candidates.drop(index=exclude_lots, errors='ignore')
 
     developed_site_data = lotwise_pdev_sim(
         development_candidates=development_candidates,

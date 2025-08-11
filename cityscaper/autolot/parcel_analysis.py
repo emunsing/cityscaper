@@ -15,6 +15,8 @@ from loguru import logger
 import traceback
 from dataclasses import dataclass
 
+MIN_PROTUBERANCE_WIDTH = 3
+
 def get_front_point(front_group_rec, use_shortest_line=False, min_segment_length = 3):
     front_line_string = build_contiguous_line_string(front_group_rec)
     angle_between_ends = get_first_to_final_angle(front_line_string)
@@ -119,7 +121,9 @@ class ParcelAnalysisResult:
     front_group_rec: pd.DataFrame
     foot_print_double_buff: Polygon
 
-def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=False):
+def get_sides_df(parcel_ser: gpd.GeoSeries, blockid: str, street_buffer=None, use_shortest_line=False, lot_coverage=0.75) -> ParcelAnalysisResult:
+    # TODO: This currently uses the portion of width in the front-rear dimension, rather than the actual area footprint.
+
     # Extract the target parcel from the parcel series
     target_parcel = parcel_ser.loc[blockid]
     # Get the boundary properties of the target parcel (one row for each boundary segment)
@@ -182,7 +186,7 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
     # Here we use the rear point to find a first pass at a rear setback, though we only use it
     # if the better approach fails.
     try:
-        rear_setback = perpendicular_line(front_midpoint, rear_point, length_multiplier=10, center_fraction=0.75)
+        rear_setback = perpendicular_line(front_midpoint, rear_point, length_multiplier=10, center_fraction=lot_coverage)
     except Exception as e:
         err_str = traceback.format_exc()
         logger.error(f"{blockid} failed with error: {err_str}")
@@ -217,7 +221,7 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
     envelope_front_midpoint = front_line.interpolate(0.5, normalized=True)
     envelope_rear_point = rear_line.interpolate(0.5, normalized=True)
     try:
-        envelope_rear_setback = perpendicular_line(envelope_front_midpoint, envelope_rear_point, length_multiplier=10, center_fraction=0.75) #.intersection(target_parcel)
+        envelope_rear_setback = perpendicular_line(envelope_front_midpoint, envelope_rear_point, length_multiplier=10, center_fraction=lot_coverage) #.intersection(target_parcel)
     except Exception as e:
         err_str = traceback.format_exc()
         logger.error(f"{blockid} failed with error: {err_str}")
@@ -235,9 +239,16 @@ def get_sides_df(parcel_ser, blockid, street_buffer=None, use_shortest_line=Fals
             foot_print_dist = front_dist
     if foot_print is None:
         logger.error(f"{blockid} failed to find a footprint")
-        return prop_rec, front_midpoint, rear_point, envelope_rear_setback, target_parcel_envelope
+        return ParcelAnalysisResult(
+            prop_rec=prop_rec,
+            front_midpoint=front_midpoint,
+            rear_point=rear_point,
+            envelope_rear_setback=envelope_rear_setback,
+            target_parcel_envelope=target_parcel_envelope,
+            front_group_rec=front_group_rec,
+            foot_print_double_buff=target_parcel.buffer(-MIN_PROTUBERANCE_WIDTH, join_style=2).buffer(MIN_PROTUBERANCE_WIDTH, join_style=2).buffer(20).oriented_envelope
+        )
     # Soften any overly narrow protuberances
-    MIN_PROTUBERANCE_WIDTH = 3
     foot_print_double_buff = foot_print.buffer(-MIN_PROTUBERANCE_WIDTH, join_style=2).buffer(MIN_PROTUBERANCE_WIDTH, join_style=2).intersection(foot_print)
 
     par = ParcelAnalysisResult(

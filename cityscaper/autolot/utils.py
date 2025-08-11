@@ -3,10 +3,10 @@ import math
 from dataclasses import dataclass
 import numpy as np
 import shapely
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points
 from shapely.ops import split as shapely_split
-
+from loguru import logger
 
 MIN_FRONT_LENGTH = 3.0
 
@@ -130,3 +130,24 @@ def get_first_to_final_angle(contiguous_line_string):
         contiguous_line_string.coords[-2]
     )
     return get_angle(first_leg, last_leg)
+
+
+def geojson_to_parcel_bounds(geojson:dict) -> dict:
+    base_dict = {}
+    for f in geojson['features']:
+        # try:
+        kk = f['properties']['mapblklot']
+        vv = []
+        for xy in f['geometry']['coordinates']:
+            try:
+                vv.append(Polygon(xy))
+            except Exception as e:
+                logger.debug(f"Skipping {kk} because {e}")
+                # print(xy)
+                continue
+        base_dict[kk] = vv
+        # except Exception as e:
+        #     logger.info(f"Skipping {kk} because {e}")
+        #     print(vv)
+        #     continue
+    return base_dict

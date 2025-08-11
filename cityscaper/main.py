@@ -9,7 +9,7 @@ from cityscaper.constants import DATA_DIR, OUTPUT_DIR, EXPORT_FIELDS, REZONING_C
 from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bound_latlon, resolve_path
 from cityscaper.modeling import pdev_model, get_site_data
 from cityscaper.geom import kml_from_parcel_table, gser_to_json_dict, kml_from_latlon
-from cityscaper.autolot.autolot import group_lots_by_geometry, geojson_to_parcel_bound_polygon, get_parcel_bounds_ser, get_footprints
+from cityscaper.autolot.autolot import group_lots_by_geometry, geojson_to_parcel_bound_polygon, get_parcel_bounds_ser, get_footprints, get_footprints_with_hard_coverage_limits
 from cityscaper.arkit import kmz_from_list
 from shapely.geometry import Polygon
 import click
@@ -208,9 +208,13 @@ def full_pipe(geom_select,
     os.makedirs(export_dir, exist_ok=True)
     merged_site_data.to_csv(os.path.join(export_dir, 'site_data.csv'), index=True, index_label='mapblklot')
 
-    footprints = get_footprints(parcel_bounds_ser=merged_parcel_gser,
-                                lots=merged_site_data.index,
-                                )
+    # footprints = get_footprints(parcel_bounds_ser=merged_parcel_gser,
+    #                             lots=merged_site_data.index,
+    #                             )
+    site_coverage_limits = merged_site_data['lot_coverage_discount'].fillna(0.75).to_dict()
+    footprints = get_footprints_with_hard_coverage_limits(parcel_bounds_ser=merged_parcel_gser,
+                                                          lots_and_coverage_limits=site_coverage_limits,
+                                                          )
     logger.info("Done generating lot footprints")
     geom_data_dict = gser_to_json_dict(footprints)
 
@@ -223,7 +227,7 @@ def full_pipe(geom_select,
 
     kmz_from_list(
         parcel_specs=parcel_specs,
-        geom_data=geom_data,
+        geom_data=geom_data_dict,
         building_prefix=building_prefix,
         export_dir=export_dir,
         raise_err=raise_err,

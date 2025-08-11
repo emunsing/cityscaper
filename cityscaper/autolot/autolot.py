@@ -33,13 +33,17 @@ def get_parcel_bounds_ser(polygon_dict:dict) -> gpd.GeoSeries:
     parcel_bounds_ser = gpd.GeoSeries(parcel_bounds_dict)
     return parcel_bounds_ser.set_crs("EPSG:4326", allow_override=True).to_crs("EPSG:3857")
 
-def get_sides_with_coverage(parcel_bounds_ser: gpd.GeoSeries, street_buffer: gpd.GeoSeries, blockid:str,
-                            coverage_target:float =0.75, coverage_tol:float =0.05) -> ParcelAnalysisResult:
+def get_sides_df_with_hard_coverage_limit(parcel_bounds_ser: gpd.GeoSeries,
+                                          street_buffer: gpd.GeoSeries,
+                                          blockid:str,
+                                          coverage_target:float =0.75,
+                                          max_iters=10) -> ParcelAnalysisResult:
     """
     Create a function which uses binary searches to find the appropriate value of `coverage` to yield a footprint which covers the
     parcel's raw area within a tolerance of `coverage_tol`.
 
     Key steps:
+    alpha=0.5
     - Compute parcel_area from parcel_bounds_ser[blockid]
     - initialize alpha = coverage_target
     - initialize coverage_err = 1.0
@@ -47,10 +51,43 @@ def get_sides_with_coverage(parcel_bounds_ser: gpd.GeoSeries, street_buffer: gpd
         - Create a draft footprint `get_sides_df(parcel_bounds_ser, blockid, street_buffer=street_buffer, lot_coverage=alpha)`
         - Compute footprint_area
         - coverage_err = coverage_target - (footprint_area / parcel_area)
-        - if coverage_err < 0,  decrease alpha.  if coverage_err > 0, increase alpha. This can be done in a binary search manner.
-    """
-    pass
 
+    """
+    current_coverage_ratio = 1.0
+    alpha = coverage_target
+    update_factor = 0.95
+    n_attempts = 0
+    while current_coverage_ratio > coverage_target and n_attempts < max_iters:
+        n_attempts += 1
+        logger.debug(f"Attempt {n_attempts}: Trying coverage ratio {alpha}")
+        sides_df = get_sides_df(parcel_bounds_ser, blockid, street_buffer=street_buffer, lot_coverage=alpha)
+        footprint_area = sides_df.foot_print_double_buff.area
+        parcel_area = parcel_bounds_ser[blockid].area
+        current_coverage_ratio = footprint_area / parcel_area
+        alpha *= update_factor
+    return sides_df
+
+def get_footprints_with_hard_coverage_limits(parcel_bounds_ser: gpd.GeoSeries, lots_and_coverage_limits: dict[str, float]) -> gpd.GeoSeries:
+    street_buffer = streets.get_street_buffer(parcel_bounds_ser)
+
+    out_rec = {}
+    for blockid, coverage_allowance in tqdm(lots_and_coverage_limits.items()):
+        logger.debug(f"Processing {blockid=}")
+        try:
+            out_rec[blockid] = get_sides_df_with_hard_coverage_limit(parcel_bounds_ser=parcel_bounds_ser,
+                                                                     street_buffer=street_buffer,
+                                                                     blockid=blockid,
+                                                                     coverage_target=coverage_allowance,
+                                                                     )
+        except Exception as e:
+            err_str = traceback.format_exc()
+            logger.error(f"{blockid} failed with error: {err_str}")
+            continue
+        logger.info(f"{blockid} Footprint generation succeeded")
+
+    out_ser = gpd.GeoSeries({kk: vv.foot_print_double_buff for kk, vv in out_rec.items()}).set_crs("EPSG:3857")
+    out_ser = out_ser.to_crs("EPSG:4326")
+    return out_ser
 
 
 def get_footprints(parcel_bounds_ser: gpd.GeoSeries, lots: list[str]) -> gpd.GeoSeries:

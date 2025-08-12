@@ -35,8 +35,8 @@ def get_parcel_bounds_ser(polygon_dict:dict) -> gpd.GeoSeries:
     return parcel_bounds_ser.set_crs("EPSG:4326", allow_override=True).to_crs("EPSG:3857")
 
 def get_sides_df_with_hard_coverage_limit(parcel_bounds_ser: gpd.GeoSeries,
-                                          street_buffer: gpd.GeoSeries,
                                           blockid:str,
+                                          street_buffer: gpd.GeoSeries | None = None,
                                           coverage_target:float =0.75,
                                           max_iters=10,
                                           street_edges:Optional[gpd.GeoDataFrame]=None) -> ParcelAnalysisResult:
@@ -72,6 +72,7 @@ def get_sides_df_with_hard_coverage_limit(parcel_bounds_ser: gpd.GeoSeries,
 def get_footprints_with_hard_coverage_limits(parcel_bounds_ser: gpd.GeoSeries, lots_and_coverage_limits: dict[str, float]) -> gpd.GeoSeries:
     street_edges = streets.get_street_edges(parcel_bounds_ser)
     # street_buffer = streets.get_street_buffer(parcel_bounds_ser)
+    street_buffer = None
 
     out_rec = {}
     for blockid, coverage_allowance in tqdm(lots_and_coverage_limits.items()):
@@ -94,7 +95,7 @@ def get_footprints_with_hard_coverage_limits(parcel_bounds_ser: gpd.GeoSeries, l
     return out_ser
 
 
-def get_footprints(parcel_bounds_ser: gpd.GeoSeries, lots: list[str], street_edges=Optional[gpd.GeoDataFrame]=None) -> gpd.GeoSeries:
+def get_footprints(parcel_bounds_ser: gpd.GeoSeries, lots: list[str], street_edges: Optional[gpd.GeoDataFrame]=None) -> gpd.GeoSeries:
     street_buffer = streets.get_street_buffer(parcel_bounds_ser)
 
     out_rec = {}

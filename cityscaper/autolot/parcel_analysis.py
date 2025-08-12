@@ -14,6 +14,7 @@ from shapely.ops import split as shapely_split
 from loguru import logger
 import traceback
 from dataclasses import dataclass
+from loguru import logger
 
 MIN_PROTUBERANCE_WIDTH = 3
 
@@ -23,8 +24,21 @@ def get_front_point(front_group_rec, use_shortest_line=False, min_segment_length
     if (angle_between_ends < np.pi / 3.0):
         use_shortest_line = False
         logger.info("Overriding use_shortest_line to False because angle between ends is too small to warrant it")
+    if "street_type_ranking" in front_group_rec.columns:
+        logger.debug("Using street type ranking to find front point")
+        min_street_type_ranking = front_group_rec["street_type_ranking"].min()
+        old_n_segments = len(front_group_rec)
+        front_group_rec = front_group_rec[front_group_rec["street_type_ranking"] == min_street_type_ranking]
+        street_type_name = front_group_rec["street_type"].sample().iloc[0]
+        logger.debug(f"Using street type {street_type_name} to find front point")
+        new_n_segments = len(front_group_rec)
+        logger.debug(f"Found {old_n_segments - new_n_segments} segments that are not the lowest street type ranking (now: {new_n_segments})")
+        front_line_string = build_contiguous_line_string(front_group_rec)
+        # TODO: make sure we didn't break the contiguity
+    else:
+        logger.debug("Using shortest line to find front point")
     if use_shortest_line:
-
+        logger.debug("Using shortest line to find front point")
         best_candidate = None
         for line, _ in front_group_rec.iterrows():
             if line.length < min_segment_length:
@@ -57,7 +71,13 @@ def parcel_adjacency(prop_rec):
     viable_groups = group_lengths[group_lengths > MIN_FRONT_LENGTH].index
     if len(viable_groups) == 0:
         viable_groups = possible_fronts_df["group_id"].unique()
-    front_group = possible_fronts_df[possible_fronts_df["group_id"].isin(viable_groups)].groupby("group_id")["dist_from_street"].mean().idxmin()
+    if "street_type_ranking" in possible_fronts_df.columns:
+        # which group contains the highest ranked street type?
+        street_type_ser = possible_fronts_df.groupby("group_id")["street_type_ranking"].min()
+        front_group = street_type_ser.idxmin()
+    else:
+        dist_from_street_ser = possible_fronts_df[possible_fronts_df["group_id"].isin(viable_groups)].groupby("group_id")["dist_from_street"].mean()
+        front_group = dist_from_street_ser.idxmin()
     if prop_rec.loc[possible_front_mask, "group_id"].nunique() > 1:
         non_front_groups_mask = possible_fronts_df["group_id"] != front_group
         prop_rec.loc[non_front_groups_mask & possible_front_mask, "adj"] = "other"
@@ -66,19 +86,22 @@ def parcel_adjacency(prop_rec):
     return prop_rec, front_group_rec
 
 
-
-def get_boundary_props(parcel_ser, blockid, street_buffer=None, cut_off_prop=0.5) -> pd.DataFrame:
+STREET_RANKING = ["primary", "secondary", "tertiary", "unclassified", "residential", "service"]
+def get_boundary_props(parcel_ser, blockid, street_buffer=None, cut_off_prop=0.5, street_edges=None) -> pd.DataFrame:
     nearest_parcels = get_nearest_parcels(parcel_ser, blockid, 25)
     union_nearest =  nearest_parcels.geometry.union_all()
     target_parcel = parcel_ser.loc[blockid]
-
+    # Buffer out from target parcel to get overlaps with neighbors
     mitered_out = target_parcel.buffer(1, join_style='mitre', cap_style='square')
     prop_rec = {}
     initial_segment_group = None
     current_segment_group = None
     group_id = -1
+    
+    # Iterate through the segments of the buffered parcel boundary
     for start_coord, end_coord in itertools.pairwise(mitered_out.exterior.coords):
         ext_line = LineString([start_coord, end_coord])
+        # Get the points on the original parcel boundary that are closest to the start and end of the buffered line segment
         original_start, _ = nearest_points(target_parcel, Point(start_coord))
         original_end, _ = nearest_points(target_parcel, Point(end_coord))
         
@@ -96,8 +119,17 @@ def get_boundary_props(parcel_ser, blockid, street_buffer=None, cut_off_prop=0.5
         entry["group_id"] = group_id
         entry["segment_group"] = segment_group
 
-        if street_buffer is not None:
-            entry["dist_from_street"] = ext_line.distance(street_buffer)
+        midpoint = shapely.line_interpolate_point(ext_line, 0.5 * ext_line.length)
+        if street_buffer is not None and street_edges is None:
+            entry["dist_from_street"] = midpoint.distance(street_buffer)
+        elif street_edges is not None:
+            dist_ser = street_edges.distance(midpoint)
+            entry["dist_from_street"] = dist_ser.min()
+            street_type = street_edges.loc[dist_ser.idxmin(), "highway"]
+            if not street_type in STREET_RANKING:
+                street_type = "unclassified"
+            entry["street_type"] = street_type
+            entry["street_type_ranking"] = STREET_RANKING.index(street_type)
         if original_ext_line in prop_rec:
             logger.warning("duplicate line")
         prop_rec[original_ext_line] = pd.Series(entry)
@@ -121,13 +153,14 @@ class ParcelAnalysisResult:
     front_group_rec: pd.DataFrame
     foot_print_double_buff: Polygon
 
-def get_sides_df(parcel_ser: gpd.GeoSeries, blockid: str, street_buffer=None, use_shortest_line=False, lot_coverage=0.75) -> ParcelAnalysisResult:
+def get_sides_df(parcel_ser: gpd.GeoSeries, blockid: str, street_buffer=None, use_shortest_line=False, lot_coverage=0.75,
+street_edges=None) -> ParcelAnalysisResult:
     # TODO: This currently uses the portion of width in the front-rear dimension, rather than the actual area footprint.
 
     # Extract the target parcel from the parcel series
     target_parcel = parcel_ser.loc[blockid]
     # Get the boundary properties of the target parcel (one row for each boundary segment)
-    prop_rec = get_boundary_props(parcel_ser, blockid, street_buffer=street_buffer)
+    prop_rec = get_boundary_props(parcel_ser, blockid, street_buffer=street_buffer, street_edges=street_edges)
     # Augment with adjacency information and segment groups
     prop_rec, front_group_rec = parcel_adjacency(prop_rec)
     
@@ -140,7 +173,7 @@ def get_sides_df(parcel_ser: gpd.GeoSeries, blockid: str, street_buffer=None, us
         target_parcel = target_parcel.buffer(0).simplify(0.25)
 
         # Get the boundary properties of the target parcel (one row for each boundary segment)
-        prop_rec = get_boundary_props(parcel_ser, blockid, street_buffer=street_buffer)
+        prop_rec = get_boundary_props(parcel_ser, blockid, street_buffer=street_buffer, street_edges=street_edges)
         # Augment with adjacency information and segment groups
         prop_rec, front_group_rec = parcel_adjacency(prop_rec)
         try:

@@ -1,6 +1,7 @@
 import click
 import fiona
 import geopandas as gpd
+from typing import Optional
 from shapely.geometry import MultiPolygon, Polygon
 from tqdm import tqdm
 import traceback
@@ -37,7 +38,8 @@ def get_sides_df_with_hard_coverage_limit(parcel_bounds_ser: gpd.GeoSeries,
                                           street_buffer: gpd.GeoSeries,
                                           blockid:str,
                                           coverage_target:float =0.75,
-                                          max_iters=10) -> ParcelAnalysisResult:
+                                          max_iters=10,
+                                          street_edges:Optional[gpd.GeoDataFrame]=None) -> ParcelAnalysisResult:
     """
     Create a function which uses binary searches to find the appropriate value of `coverage` to yield a footprint which covers the
     parcel's raw area within a tolerance of `coverage_tol`.
@@ -60,7 +62,7 @@ def get_sides_df_with_hard_coverage_limit(parcel_bounds_ser: gpd.GeoSeries,
     while current_coverage_ratio > coverage_target and n_attempts < max_iters:
         n_attempts += 1
         logger.debug(f"Attempt {n_attempts}: Trying coverage ratio {alpha}")
-        sides_df = get_sides_df(parcel_bounds_ser, blockid, street_buffer=street_buffer, lot_coverage=alpha)
+        sides_df = get_sides_df(parcel_bounds_ser, blockid, street_buffer=street_buffer, lot_coverage=alpha, street_edges=street_edges)
         footprint_area = sides_df.foot_print_double_buff.area
         parcel_area = parcel_bounds_ser[blockid].area
         current_coverage_ratio = footprint_area / parcel_area
@@ -68,7 +70,8 @@ def get_sides_df_with_hard_coverage_limit(parcel_bounds_ser: gpd.GeoSeries,
     return sides_df
 
 def get_footprints_with_hard_coverage_limits(parcel_bounds_ser: gpd.GeoSeries, lots_and_coverage_limits: dict[str, float]) -> gpd.GeoSeries:
-    street_buffer = streets.get_street_buffer(parcel_bounds_ser)
+    street_edges = streets.get_street_edges(parcel_bounds_ser)
+    # street_buffer = streets.get_street_buffer(parcel_bounds_ser)
 
     out_rec = {}
     for blockid, coverage_allowance in tqdm(lots_and_coverage_limits.items()):
@@ -78,6 +81,7 @@ def get_footprints_with_hard_coverage_limits(parcel_bounds_ser: gpd.GeoSeries, l
                                                                      street_buffer=street_buffer,
                                                                      blockid=blockid,
                                                                      coverage_target=coverage_allowance,
+                                                                     street_edges=street_edges
                                                                      )
         except Exception as e:
             err_str = traceback.format_exc()
@@ -90,14 +94,14 @@ def get_footprints_with_hard_coverage_limits(parcel_bounds_ser: gpd.GeoSeries, l
     return out_ser
 
 
-def get_footprints(parcel_bounds_ser: gpd.GeoSeries, lots: list[str]) -> gpd.GeoSeries:
+def get_footprints(parcel_bounds_ser: gpd.GeoSeries, lots: list[str], street_edges=Optional[gpd.GeoDataFrame]=None) -> gpd.GeoSeries:
     street_buffer = streets.get_street_buffer(parcel_bounds_ser)
 
     out_rec = {}
     for blockid in tqdm(lots):
         logger.debug(f"Processing {blockid=}")
         try:
-            out_rec[blockid] = get_sides_df(parcel_bounds_ser, blockid, street_buffer=street_buffer)
+            out_rec[blockid] = get_sides_df(parcel_bounds_ser, blockid, street_buffer=street_buffer, street_edges=street_edges)
         except Exception as e:
             err_str = traceback.format_exc()
             logger.error(f"{blockid} failed with error: {err_str}")

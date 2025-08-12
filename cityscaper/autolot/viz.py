@@ -4,7 +4,7 @@ from cityscaper.autolot.parcel_analysis import get_sides_df
 import matplotlib.pyplot as plt
 
 
-def plot_edges(parcel_ser, blockid, ax=None, street_buffer=None, use_shortest_line=False, show_envelope=False):
+def plot_edges(parcel_ser, blockid, ax=None, street_buffer=None, use_shortest_line=False, show_envelope=False, street_edges=None):
     target_parcel = parcel_ser.loc[blockid]
     nearest_parcels = get_nearest_parcels(parcel_ser, blockid, 25)
     if ax is None:
@@ -17,7 +17,7 @@ def plot_edges(parcel_ser, blockid, ax=None, street_buffer=None, use_shortest_li
         shap_plot.plot_polygon(sb0, ax=ax, color='lightblue', alpha=0.35)
 
 
-    par = get_sides_df(parcel_ser, blockid, street_buffer=street_buffer, use_shortest_line=use_shortest_line)
+    par = get_sides_df(parcel_ser, blockid, street_buffer=street_buffer, use_shortest_line=use_shortest_line, street_edges=street_edges)
 
     adj_color_mapper = {"parcel":"green", "front":"red", "other":"purple"}
     shap_plot.plot_points(par.front_midpoint, ax=ax, color='blue', alpha=0.7, marker='*', markersize=10)

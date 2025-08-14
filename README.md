@@ -154,6 +154,9 @@ Google Maps squares from Blosm selector
 - Eureka Valley:
   - Gmaps selector: `-122.44248,37.75446,-122.42174,37.77131`
   - Centered at 
+- Marina / Cow hollow:
+  - Gmaps selector: `-122.45102,37.79131,-122.40198,37.81284`
+  - Centered at
 - Frontier Tower
   - Gmaps selector: `-122.42006,37.77483,-122.41333,37.77926`
   - Centered at -122.416695,37.777045

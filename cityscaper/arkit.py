@@ -256,7 +256,7 @@ def buildings_from_list(parcel_specs, geom_data, building_prefix='building', exp
                     export_format=export_format
                 )
         except Exception as e:
-            print(f"Error generating building for {lot} geom {j}: {e}", file=sys.stderr)
+            print(f"Error generating building for {lot}: {e}", file=sys.stderr)
             if raise_err:
                 raise e
             else:

@@ -16,12 +16,13 @@ import mathutils
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 
-project_root = Path.home() / "src/cityscaper"
+project_root = Path.home() / "src" / "cityscaper"
+texture_root = project_root / "textures"
 
-short_wall_textures_dir = project_root / "textures/walls_short"
-wall_textures_dir = project_root / "textures/walls"
-high_wall_textures_dir = project_root / "textures/walls_high"
-roof_textures_dir = project_root / "textures/roofs"
+short_wall_textures_dir = texture_root / "walls_short"
+wall_textures_dir = texture_root / "walls"
+high_wall_textures_dir = texture_root / "walls_high"
+roof_textures_dir = texture_root / "roofs"
 
 short_wall_textures = sorted([f.name for f in short_wall_textures_dir.iterdir() 
                               if f.is_file() and f.suffix.lower() in {'.jpg', '.jpeg', '.png'}])

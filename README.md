@@ -160,4 +160,6 @@ Google Maps squares from Blosm selector
 - Frontier Tower
   - Gmaps selector: `-122.42006,37.77483,-122.41333,37.77926`
   - Centered at -122.416695,37.777045
+- All of SF
+  - GMaps selector: `-122.51953,37.70830,-122.38251,37.81211`
 # Questions for Salim

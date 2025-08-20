@@ -6,9 +6,11 @@ import os
 import csv
 import json
 import zipfile
+import xml.etree.ElementTree as ET
+import re
 from cityscaper.blender_building import (TransverseMercator, make_uv_mat, create_building_mesh,
                                          get_roof_texture_path, get_wall_texture_path,
-                                         apply_materials_and_uvs)
+                                         apply_materials_and_uvs, texture_root)
 
 
 EXPORT_FORMATS = ['dae', 'usdz']
@@ -38,7 +40,8 @@ def get_parcel_xy(parcel_coords, centroid_lon, centroid_lat):
 def create_file_for_xy_building(parcel_xy, height_meters, building_name, export_dir,
                                 ground_z=0,
                                 apply_materials=False,
-                                export_format='dae'):
+                                export_format='dae',
+                                use_texture_copies=True):
     assert export_format.lower() in EXPORT_FORMATS, "Unsupported export format: %s" % export_format
 
     obj = create_building_mesh(
@@ -89,7 +92,7 @@ def create_file_for_xy_building(parcel_xy, height_meters, building_name, export_
             export_global_up_selection='Z',  # use Blender’s Z axis as “up”
             apply_global_orientation=True,  # actually apply that axis rotation
             triangulate=True,  # optional, Collada likes triangles
-            use_texture_copies=True  # include your textures if any
+            use_texture_copies=use_texture_copies  # include your textures if any
         )
 
     elif export_format.lower() == 'usdz':
@@ -229,7 +232,8 @@ def buildings_from_csv( csv_path, geometry_file, building_prefix, export_dir, ra
 
 
 def buildings_from_list(parcel_specs, geom_data, building_prefix='building', export_dir=None,
-                            raise_err=False, apply_materials=False, export_format='dae'):
+                            raise_err=False, apply_materials=False, export_format='dae',
+                        use_texture_copies=True):
     successful_buildings, total_parcels = 0, len(parcel_specs)
     building_centroids = {}
 
@@ -253,7 +257,8 @@ def buildings_from_list(parcel_specs, geom_data, building_prefix='building', exp
                     building_name=building_name,
                     export_dir=export_dir,
                     apply_materials=apply_materials,
-                    export_format=export_format
+                    export_format=export_format,
+                    use_texture_copies=use_texture_copies
                 )
         except Exception as e:
             print(f"Error generating building for {lot}: {e}", file=sys.stderr)
@@ -319,7 +324,8 @@ def kmz_from_list(parcel_specs, geom_data, building_prefix='building', export_di
         export_dir=export_dir,
         raise_err=raise_err,
         apply_materials=True,
-        export_format='dae'
+        export_format='dae',
+        use_texture_copies=False,
     )
     
     # Create the KML content for 3D models
@@ -327,7 +333,8 @@ def kmz_from_list(parcel_specs, geom_data, building_prefix='building', export_di
     
     # Create the KMZ file
     kmz_path = os.path.join(export_dir, f"{building_prefix}_buildings.kmz")
-    create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, building_prefix)
+    create_kmz_file(kmz_path, kml_content, export_dir=export_dir, building_centroids=building_centroids,
+                    building_prefix=building_prefix, texture_dir=texture_root)
     
     print(f"KMZ file created: {kmz_path}")
     return building_centroids
@@ -456,7 +463,7 @@ def create_kml_for_3d_models(building_centroids, building_prefix, export_dir, ge
     return kml_header + "\n".join(placemarks) + kml_footer
 
 
-def create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, building_prefix):
+def create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, building_prefix, texture_dir=None):
     """
     Create a KMZ file containing the KML and all files from the export directory.
     
@@ -466,6 +473,7 @@ def create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, build
         export_dir: Directory containing DAE files and textures
         building_centroids: Dictionary mapping building names to coordinates
         building_prefix: Prefix for building names
+        texture_dir: Directory containing texture files referenced by DAE files
     """
     # First, collect all files we want to include (excluding the KMZ file itself)
     files_to_include = []
@@ -492,25 +500,133 @@ def create_kmz_file(kmz_path, kml_content, export_dir, building_centroids, build
     
     print(f"Found {len(files_to_include)} files to include in KMZ")
     
+    # Set up namespace for parsing DAE files
+    namespaces = {'collada': 'http://www.collada.org/2005/11/COLLADASchema'}
+    
     with zipfile.ZipFile(kmz_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
         # Add the main KML file
         kmz.writestr('doc.kml', kml_content)
         
-        # Add all collected files to the KMZ
+        # Track texture files that need to be included
+        texture_files_to_include = set()
+        
+        # Process DAE files to update texture references and collect texture files
         for file_path in files_to_include:
-            # Calculate the relative path within the KMZ
-            rel_path = os.path.relpath(file_path, export_dir)
-            
-            # For DAE files, put them in the models/ subdirectory
             if file_path.lower().endswith('.dae'):
-                kmz_path_in_archive = f"{os.path.basename(file_path)}"
+                # Parse and update DAE file
+                updated_dae_content = process_dae_file(file_path, texture_dir, texture_files_to_include)
+                
+                # Add the updated DAE file to KMZ
+                dae_filename = os.path.basename(file_path)
+                kmz.writestr(dae_filename, updated_dae_content)
+                print(f"Added to KMZ: {dae_filename}")
             else:
-                # For other files (textures, etc.), maintain their relative structure
+                # For non-DAE files, add them as-is
+                rel_path = os.path.relpath(file_path, export_dir)
                 kmz_path_in_archive = rel_path
-            
-            # Add the file to the KMZ
-            kmz.write(file_path, kmz_path_in_archive)
-            print(f"Added to KMZ: {kmz_path_in_archive}")
+                kmz.write(file_path, kmz_path_in_archive)
+                print(f"Added to KMZ: {kmz_path_in_archive}")
+        
+        # Add all texture files that were referenced
+        for texture_file in texture_files_to_include:
+            if os.path.exists(texture_file):
+                # Calculate relative path within KMZ
+                if texture_dir:
+                    rel_path = os.path.relpath(texture_file, texture_dir)
+                else:
+                    rel_path = os.path.basename(texture_file)
+                
+                kmz.write(texture_file, rel_path)
+                print(f"Added texture to KMZ: {rel_path}")
+            else:
+                print(f"Warning: Texture file not found: {texture_file}")
+        
+        print(f"KMZ creation complete. Added {len(texture_files_to_include)} texture files.")
+
+
+def process_dae_file(dae_file_path, texture_dir:str, texture_files_to_include):
+    """
+    Process a DAE file to update texture references and collect texture files.
+    
+    Args:
+        dae_file_path: Path to the DAE file
+        texture_dir: Directory containing texture files
+        texture_files_to_include: Set to collect texture files that need to be included
+    
+    Returns:
+        Updated DAE content as string
+    """
+    texture_dir = str(texture_dir)
+    try:
+        # Read the DAE file as text
+        with open(dae_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse the DAE file to find texture references
+        tree = ET.parse(dae_file_path)
+        root = tree.getroot()
+        
+        # Set up namespace
+        namespaces = {'collada': 'http://www.collada.org/2005/11/COLLADASchema'}
+        
+        # Find all image elements and update their init_from paths
+        for image_elem in root.findall('.//collada:image', namespaces):
+            init_from_elem = image_elem.find('collada:init_from', namespaces)
+            if init_from_elem is not None and init_from_elem.text:
+                original_path = init_from_elem.text
+                
+                # Check if this is an absolute path that should be updated
+                if os.path.isabs(original_path):
+                    # Extract the filename and subdirectory structure
+                    if texture_dir and original_path.startswith(texture_dir):
+                        # Calculate relative path from texture_dir
+                        rel_path = os.path.relpath(original_path, texture_dir)
+                        # Replace the absolute path with relative path in the content
+                        content = content.replace(f'<init_from>{original_path}</init_from>', f'<init_from>{rel_path}</init_from>')
+                        
+                        # Add to texture files to include
+                        texture_files_to_include.add(original_path)
+                        print(f"Updated texture reference: {original_path} -> {rel_path}")
+                    else:
+                        # For other absolute paths, just use the filename
+                        filename = os.path.basename(original_path)
+                        # Replace the absolute path with filename in the content
+                        content = content.replace(f'<init_from>{original_path}</init_from>', f'<init_from>{filename}</init_from>')
+                        
+                        # Try to find the texture file in texture_dir
+                        if texture_dir:
+                            potential_path = os.path.join(texture_dir, filename)
+                            if os.path.exists(potential_path):
+                                texture_files_to_include.add(potential_path)
+                                print(f"Found texture file: {potential_path}")
+                            else:
+                                # Search in subdirectories
+                                found_in_subdir = False
+                                for root_dir, dirs, files in os.walk(texture_dir):
+                                    if filename in files:
+                                        full_path = os.path.join(root_dir, filename)
+                                        texture_files_to_include.add(full_path)
+                                        # Update to relative path from texture_dir
+                                        rel_path = os.path.relpath(full_path, texture_dir)
+                                        content = content.replace(f'<init_from>{original_path}</init_from>', f'<init_from>{rel_path}</init_from>')
+                                        print(f"Found texture file in subdirectory: {full_path} -> {rel_path}")
+                                        found_in_subdir = True
+                                        break
+                                if not found_in_subdir:
+                                    print(f"Warning: Could not find texture file: {filename}")
+        
+        return content
+        
+    except ET.ParseError as e:
+        print(f"Warning: Could not parse DAE file {dae_file_path}: {e}")
+        # Return original content if parsing fails
+        with open(dae_file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        print(f"Warning: Error processing DAE file {dae_file_path}: {e}")
+        # Return original content if processing fails
+        with open(dae_file_path, 'r', encoding='utf-8') as f:
+            return f.read()
 
 
 @cli.command()

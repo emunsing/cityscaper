@@ -37,12 +37,22 @@ def get_parcel_xy(parcel_coords, centroid_lon, centroid_lat):
     return parcel_xy
 
 
+def clear_collections():
+    for c in bpy.context.scene.collection.children:
+        bpy.context.scene.collection.children.unlink(c)
+
+    for c in bpy.data.collections:
+        #        if not c.users:
+        bpy.data.collections.remove(c)
+
 def create_file_for_xy_building(parcel_xy, height_meters, building_name, export_dir,
                                 ground_z=0,
                                 apply_materials=False,
                                 export_format='dae',
                                 use_texture_copies=True):
     assert export_format.lower() in EXPORT_FORMATS, "Unsupported export format: %s" % export_format
+
+    clear_collections()
 
     obj = create_building_mesh(
         parcel_xy=parcel_xy,
@@ -115,6 +125,7 @@ def create_file_for_xy_building(parcel_xy, height_meters, building_name, export_
         )
     else:
         raise ValueError(f"Unsupported export format: {export_format}")
+    del obj
 
 
 def clear_scene():

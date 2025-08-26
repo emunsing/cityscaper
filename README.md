@@ -162,4 +162,6 @@ Google Maps squares from Blosm selector
   - Centered at -122.416695,37.777045
 - All of SF
   - GMaps selector: `-122.51953,37.70830,-122.38251,37.81211`
+- Geary
+  - GMaps selector: `-122.47401,37.77746,-122.45344,37.78959` 
 # Questions for Salim

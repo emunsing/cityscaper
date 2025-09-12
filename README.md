@@ -1,3 +1,9 @@
+# Cityscaper
+
+## Setup
+
+Requires Poetry for proper dependency management. For a quick shortcut, use pip and requirements.txt.
+
 # Notes
 
 ## Entry points:

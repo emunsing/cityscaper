@@ -13,7 +13,7 @@ from cityscaper.blender_building import (TransverseMercator, make_uv_mat, create
                                          apply_materials_and_uvs, texture_root)
 
 
-EXPORT_FORMATS = ['dae', 'usdz']
+EXPORT_FORMATS = ['dae', 'usdz', 'glb']
 
 @click.group()
 def cli():
@@ -122,6 +122,18 @@ def create_file_for_xy_building(parcel_xy, height_meters, building_name, export_
             convert_orientation=True,  # apply axis remap
             export_global_forward_selection='Y',  # Blender +Y → file +Z (north)
             export_global_up_selection='Z'  # Blender +Z → file +Y (up)
+        )
+    elif export_format.lower() == 'glb':
+        export_path = os.path.join(export_dir, f"{building_name}.glb")
+        bpy.ops.export_scene.gltf(
+            filepath=export_path,
+            use_selection=True,  # only export selected objects
+            export_format='GLB',  # binary glTF format
+            export_materials='EXPORT',  # include materials
+            export_normals=True,  # include normals
+            export_draco_mesh_compression_enable=False,  # disable compression for compatibility
+            export_texture_dir='',  # embed textures in GLB file
+            export_yup=True,  # use Y-up coordinate system (standard for glTF)
         )
     else:
         raise ValueError(f"Unsupported export format: {export_format}")

@@ -16,7 +16,7 @@ import mathutils
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 
-project_root = Path.home() / "src" / "cityscaper"
+project_root = Path(__file__).parent.parent
 texture_root = project_root / "textures"
 
 short_wall_textures_dir = texture_root / "walls_short"

@@ -8,7 +8,7 @@ import json
 from cityscaper.constants import DATA_DIR, OUTPUT_DIR, EXPORT_FIELDS, REZONING_CODES
 from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bound_latlon, resolve_path
 from cityscaper.modeling import pdev_model, get_site_data
-from cityscaper.geom import kml_from_parcel_table, gser_to_json_dict, kml_from_latlon
+from cityscaper.geom import kml_from_parcel_table, gser_to_json_dict, kml_from_latlon, geojson_from_parcel_table
 from cityscaper.autolot.autolot import group_lots_by_geometry, geojson_to_parcel_bound_polygon, get_parcel_bounds_ser, get_footprints, get_footprints_with_hard_coverage_limits
 from cityscaper.arkit import kmz_from_list
 from shapely.geometry import Polygon
@@ -51,12 +51,36 @@ def build_kml(
     with open(csv_path, newline="") as f:
         parcel_specs = list(csv.DictReader(f))
 
-    kml = kml_from_parcel_table(parcel_specs=parcel_specs,
+    kml = kml_from_parcel_table(parcel_table=parcel_specs,
                                 geom_data=geom_data,)
 
     resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
     with open(resolved_fname, 'w') as kml_file:
         kml_file.write(kml)
+
+
+@cli.command()
+@click.argument('csv_path', type=click.Path(exists=True, dir_okay=False))
+@click.argument('output_fname', type=click.Path(dir_okay=False))
+@click.option('--geometry_file', type=click.Path(exists=True, dir_okay=False), default=DATA_DIR / 'sf_map_unfiltered.json',)
+def build_geojson(
+        csv_path,
+        output_fname,
+        geometry_file,
+):
+    """Generate GeoJSON file from CSV building data and geometry."""
+    with open(geometry_file, "r") as f:
+        geom_data = json.load(f)
+
+    with open(csv_path, newline="") as f:
+        parcel_specs = list(csv.DictReader(f))
+
+    geojson = geojson_from_parcel_table(parcel_table=parcel_specs,
+                                        geom_data=geom_data,)
+
+    resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
+    with open(resolved_fname, 'w') as geojson_file:
+        json.dump(geojson, geojson_file, indent=2)
 
 
 @cli.command()

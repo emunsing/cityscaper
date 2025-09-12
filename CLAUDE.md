@@ -28,6 +28,9 @@ python cityscaper/main.py parse-geojson-rds input.RDS output.json
 
 # Build KML from CSV and geometry
 python cityscaper/main.py build-kml input.csv output.kml
+
+# Build GeoJSON from CSV and geometry
+python cityscaper/main.py build-geojson input.csv output.geojson
 ```
 
 ### Testing and Code Quality

@@ -31,7 +31,29 @@ python cityscaper/main.py build-kml input.csv output.kml
 
 # Build GeoJSON from CSV and geometry
 python cityscaper/main.py build-geojson input.csv output.geojson
+
+# Instant browser visualization - Generate GeoJSON and open in 3DStreet
+python cityscaper/main.py build-geojson input.csv output.geojson --generate_url --open_browser
 ```
+
+Options for `build-geojson`:
+- `--generate_url`: Creates a URL with GeoJSON embedded in hash fragment
+- `--open_browser`: Automatically opens the URL in default browser
+- `--url_base`: Specify base URL (default: https://3dstreet.app, use http://localhost:3333 for local)
+- `--coord_precision`: Decimal places for coordinates (default: 6 for ~0.11m accuracy)
+
+Example for Duboce Triangle area with April 2025 rezoning:
+```bash
+# Step 1: Generate simulation with rezoning scenario
+python cityscaper/main.py model --rezoning_scenario apr_2025 --simulation_years 20 --pdev_multiplier 2.0 \
+  --output_fname duboce_apr2025.csv -- -122.43765 37.76040 -122.42448 37.77096
+
+# Step 2: Visualize in browser
+python cityscaper/main.py build-geojson duboce_apr2025.csv duboce_apr2025.geojson \
+  --generate_url --open_browser --url_base http://localhost:3333
+```
+
+This generates ~166 buildings with varied heights (25-160 feet) showing the impact of the April 2025 Family Rezoning proposal.
 
 ### Testing and Code Quality
 ```bash

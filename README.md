@@ -4,15 +4,43 @@
 
 Requires Poetry for proper dependency management. For a quick shortcut, use pip and requirements.txt.
 
+## Quick Start: Instant Browser Visualization
+
+Visualize zoning simulations directly in your browser without external tools:
+
+```bash
+# Step 1: Generate development simulation for Duboce Triangle area
+# Using April 2025 rezoning scenario with 20-year projection
+python main.py model --rezoning_scenario apr_2025 --simulation_years 20 --pdev_multiplier 2.0 \
+  --output_fname duboce_apr2025.csv -- -122.43765 37.76040 -122.42448 37.77096
+
+# Step 2: Convert to GeoJSON and open in browser (3DStreet)
+python main.py build-geojson duboce_apr2025.csv duboce_apr2025.geojson --generate_url --open_browser
+
+# Key model options:
+#   --rezoning_scenario [baseline|fall_2023|apr_2025|builders_remedy]  # Zoning scenario
+#   --simulation_years 20       # Years to simulate (more years = more buildings)
+#   --pdev_multiplier 2.0       # Development probability multiplier
+
+# Visualization options:
+#   --url_base http://localhost:3333  # Use local 3DStreet instance
+#   --coord_precision 6                # Coordinate decimal places (default: 6)
+#   --generate_url                     # Generate URL with GeoJSON in hash
+#   --open_browser                     # Automatically open in default browser
+```
+
+This workflow enables rapid iteration when adjusting zoning parameters - see your building simulations instantly in 3D without manual file uploads or external mapping tools. The example above shows ~166 buildings with varied heights from 25-160 feet.
+
 # Notes
 
 ## Entry points:
 
 Python data processing:
-- main.py: 
-  - Parse sf_map.RDS file to parcel lat/lon dict, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047` 
+- main.py:
+  - Parse sf_map.RDS file to parcel lat/lon dict, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047`
   - Run pdev simulation for a geometry, like `$ python main.py model --output_fname ~/Desktop/rezoning_output.csv -- -122.43270 37.76874 -122.43060 37.77047`
   - Create kml of the raw geometry, like `$ python main.py build-kml ~/Desktop/rezoning_frontier.csv ~/frontier_redevelopment.kml`
+  - Visualize in browser - Generate GeoJSON and open in 3DStreet: `$ python main.py build-geojson ~/Desktop/rezoning_output.csv output.geojson --generate_url --open_browser`
 
 Creating USDZ files for Apple ARKit:
   - Create simple DAE files and convert them to USDZ files for use with Apple ARKit: `$ python arkit.py build-dae-from-csv ~/Desktop/rezoning_frontier.csv  --raise_err  --apply_materials`

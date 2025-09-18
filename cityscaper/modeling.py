@@ -39,7 +39,7 @@ def get_site_data(geom_select: tuple[float, float, float, float] = (-122.43270, 
 
     if override_csv:
         # TODO: Handle lot mergers in the override csv
-        override_lots = pd.read_csv(override_csv, index_col='mapblklot')
+        override_lots = pd.read_csv(override_csv, dtype={'mapblklot':str, 'height':int}, index_col='mapblklot')
         assert 'height' in override_lots.columns, "Overrides must contain mapblklot and heights"
         lots_needing_data = override_lots.index.difference(rezoning_scenario_data.index)
         if len(lots_needing_data) > 0:

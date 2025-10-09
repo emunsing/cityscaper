@@ -8,7 +8,7 @@ import json
 from cityscaper.constants import DATA_DIR, OUTPUT_DIR, EXPORT_FIELDS, REZONING_CODES
 from cityscaper.utils import geojson_rds_to_json, geojson_to_parcel_bound_latlon, resolve_path
 from cityscaper.modeling import pdev_model, get_site_data
-from cityscaper.geom import kml_from_parcel_table, gser_to_json_dict, kml_from_latlon
+from cityscaper.geom import kml_from_parcel_table, gser_to_json_dict, kml_from_latlon, geojson_from_parcel_table
 from cityscaper.autolot.autolot import group_lots_by_geometry, geojson_to_parcel_bound_polygon, get_parcel_bounds_ser, get_footprints, get_footprints_with_hard_coverage_limits
 from cityscaper.arkit import kmz_from_list
 from shapely.geometry import Polygon
@@ -51,12 +51,85 @@ def build_kml(
     with open(csv_path, newline="") as f:
         parcel_specs = list(csv.DictReader(f))
 
-    kml = kml_from_parcel_table(parcel_specs=parcel_specs,
+    kml = kml_from_parcel_table(parcel_table=parcel_specs,
                                 geom_data=geom_data,)
 
     resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
     with open(resolved_fname, 'w') as kml_file:
         kml_file.write(kml)
+
+
+@cli.command()
+@click.argument('csv_path', type=click.Path(exists=True, dir_okay=False))
+@click.argument('output_fname', type=click.Path(dir_okay=False))
+@click.option('--geometry_file', type=click.Path(exists=True, dir_okay=False), default=DATA_DIR / 'sf_map_unfiltered.json',)
+@click.option('--generate_url', is_flag=True, help='Generate URL with GeoJSON in hash')
+@click.option('--url_base', default='https://3dstreet.app', help='Base URL for hash generation')
+@click.option('--coord_precision', default=6, type=int, help='Decimal places for coordinates (4=11m precision)')
+@click.option('--open_browser', is_flag=True, help='Open the generated URL in default browser')
+def build_geojson(
+        csv_path,
+        output_fname,
+        geometry_file,
+        generate_url,
+        url_base,
+        coord_precision,
+        open_browser,
+):
+    """Generate GeoJSON file from CSV building data and geometry."""
+    with open(geometry_file, "r") as f:
+        geom_data = json.load(f)
+
+    with open(csv_path, newline="") as f:
+        parcel_specs = list(csv.DictReader(f))
+
+    geojson = geojson_from_parcel_table(parcel_table=parcel_specs,
+                                        geom_data=geom_data,)
+
+    resolved_fname = resolve_path(output_fname, default_parent=OUTPUT_DIR)
+    with open(resolved_fname, 'w') as geojson_file:
+        json.dump(geojson, geojson_file, indent=2)
+
+    if generate_url:
+        import urllib.parse
+
+        # Round coordinates to reduce size
+        def round_coords(coords, decimals=coord_precision):
+            if isinstance(coords, list):
+                if isinstance(coords[0], (int, float)):
+                    return [round(c, decimals) for c in coords]
+                else:
+                    return [round_coords(c, decimals) for c in coords]
+            return coords
+
+        # Create a copy for URL generation with reduced precision
+        geojson_compressed = json.loads(json.dumps(geojson))
+        for feature in geojson_compressed['features']:
+            if 'geometry' in feature and 'coordinates' in feature['geometry']:
+                feature['geometry']['coordinates'] = round_coords(feature['geometry']['coordinates'])
+
+        # Generate compact JSON (no whitespace)
+        geojson_str = json.dumps(geojson_compressed, separators=(',', ':'))
+
+        # Create URL with hash - only encode the GeoJSON part, not the prefix
+        full_url = url_base + '/#geojson:' + urllib.parse.quote(geojson_str)
+
+        logger.info(f"GeoJSON size: {len(geojson_str):,} bytes")
+        logger.info(f"URL length: {len(full_url):,} characters")
+
+        # Save URL to file
+        url_fname = str(resolved_fname).replace('.geojson', '_url.txt')
+        with open(url_fname, 'w') as url_file:
+            url_file.write(full_url)
+        logger.info(f"URL saved to {url_fname}")
+
+        print(f"\nURL generated ({len(full_url):,} characters)")
+        print(f"Saved to: {url_fname}")
+
+        if open_browser:
+            import webbrowser
+            webbrowser.open(full_url)
+            print(f"Opening URL in default browser...")
 
 
 @cli.command()

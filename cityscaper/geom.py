@@ -109,3 +109,58 @@ def gser_to_json_dict(gser: gpd.GeoSeries) -> dict[str, list[list[list[float]]]]
 def kml_from_shapely_polygons(parcel_spec_gser: gpd.GeoSeries)-> str:
     parcel_latlons = gser_to_json_dict(parcel_spec_gser)
     return kml_from_latlon(parcel_geom=parcel_latlons)
+
+
+def geojson_from_parcel_table(parcel_table: list[dict[str, float | str]],
+                              geom_data: dict[str, list[list[list[float]]]]) -> dict:
+    """
+    Generate GeoJSON from parcel table and geometry data.
+    
+    :param parcel_table: Desired output parcel information, as dictionaries with keys 'mapblklot' and 'developed_height'
+    :param geom_data: Dictionary mapping 'mapblklot' to list of [lat, lng] coordinates
+    :return: GeoJSON FeatureCollection dictionary
+    """
+    features = []
+    
+    for i, row in enumerate(parcel_table):
+        lot = row["mapblklot"]
+        try:
+            height_meters = float(row.get("developed_height", 0.0)) * 0.3048  # Convert feet to meters
+            height_feet = float(row.get("developed_height", 0.0))  # Keep original for display
+            
+            if lot in geom_data:
+                parcel_polygons = geom_data[lot]
+                
+                for j, polygon in enumerate(parcel_polygons):
+                    # GeoJSON uses [longitude, latitude] order 
+                    # Our data is already in [lng, lat] format, so use as-is
+                    coordinates = [polygon]
+                    
+                    feature = {
+                        "type": "Feature",
+                        "properties": {
+                            "mapblklot": lot,
+                            "height_feet": height_feet,
+                            "height_meters": height_meters,
+                            "name": f"{lot}_{j+1}",
+                            "parcel_index": j + 1
+                        },
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": coordinates
+                        }
+                    }
+                    features.append(feature)
+        except KeyError:
+            print(f"KeyError: '{lot}'")
+            continue
+        except (ValueError, TypeError) as e:
+            print(f"Error processing parcel {lot}: {e}")
+            continue
+    
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    
+    return geojson
